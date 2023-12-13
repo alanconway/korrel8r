@@ -23,7 +23,7 @@ Given a _start_ object, korrel8r searches for a chain of related rules, and find
 Korrel8r can be run as a plain executable, outside the cluster, and connect to the API server and stores inside the cluster. It can also run as a deployed service inside the cluster.
 
 [id="index-architecture"]
-== Korrel8r architecture
+== Korrel8r Architecture
 
 include::background.adoc[leveloffset=+2]
 include::about-domains.adoc[leveloffset=+2]
@@ -37,7 +37,14 @@ include::installing-korrel8r-ocp.adoc[leveloffset=+1]
 include::using-korrel8r.adoc[leveloffset=+1]
 
 [id="index-api-reference"]
-== API reference documentation
+// REST API
+include::zz_rest_api.adoc[leveloffset=+1]
+
+
+[id="index-domain-reference"]
+== Domain Reference
 
 include::zz_domains.adoc[leveloffset=+2]
-include::zz_rest_api.adoc[leveloffset=+2]
+
+// FAQ
+include::FAQ.adoc[leveloffset=+1]
