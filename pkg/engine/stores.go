@@ -61,7 +61,7 @@ func (s *store) Get(ctx context.Context, q korrel8r.Query, constraint *korrel8r.
 	return err
 }
 
-// Ensure the store is connected.
+// Ensure the store is created.
 func (s *store) Ensure() (korrel8r.Store, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -130,7 +130,8 @@ func (ss *stores) Add(newStore *store) error {
 		return fmt.Errorf("duplicate store configuration: %v", newStore.Original)
 	}
 	ss.stores = append(ss.stores, newStore)
-	return nil
+	_, err := newStore.Ensure()
+	return err
 }
 
 func (ss *stores) Get(ctx context.Context, q korrel8r.Query, constraint *korrel8r.Constraint, result korrel8r.Appender) error {

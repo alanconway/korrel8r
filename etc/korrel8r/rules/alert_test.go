@@ -10,7 +10,7 @@ import (
 )
 
 func TestAlertToRules(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	for _, x := range []struct {
 		rule  string
 		start *alert.Object

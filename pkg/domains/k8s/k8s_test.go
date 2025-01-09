@@ -8,14 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/korrel8r/korrel8r/pkg/graph"
+	"github.com/korrel8r/korrel8r/internal/pkg/test/mock"
 	"github.com/korrel8r/korrel8r/pkg/korrel8r"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -23,8 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func TestDomain_Class(t *testing.T) {
-	require.NoError(t, appsv1.AddToScheme(scheme.Scheme))
+func TestDomain_Class_builtin(t *testing.T) {
 	for _, x := range []struct {
 		name string
 		want korrel8r.Class
@@ -41,16 +42,34 @@ func TestDomain_Class(t *testing.T) {
 		{"Deployment.v1.apps", ClassOf(&appsv1.Deployment{})}, // Kind, version and group
 	} {
 		t.Run(x.name, func(t *testing.T) {
-			assert.NotNil(t, x.want)
 			got := Domain.Class(x.name)
-			require.NotNil(t, got)
-			assert.Equal(t, x.want.Name(), got.Name())
+			assert.Equal(t, x.want, got)
+			// Round trip
+			got2 := Domain.Class(got.Name())
+			assert.Equal(t, got, got2)
+		})
+	}
+}
 
-			// Round trip for String()
-			name := got.Name()
-			got2 := Domain.Class(name)
-			require.NotNil(t, got2)
-			assert.Equal(t, name, got2.Name())
+func TestDomain_Class_restmapper(t *testing.T) {
+	rm := meta.NewDefaultRESTMapper([]schema.GroupVersion{schema.GroupVersion{Group: "fake", Version: "v1"}})
+	dummy := schema.GroupVersionKind{Group: "fake", Version: "v1", Kind: "Dummy"}
+	rm.Add(dummy, meta.RESTScopeNamespace)
+	Domain.restMapper = rm
+
+	for _, x := range []struct {
+		name string
+		want korrel8r.Class
+	}{
+		{"Dummy.v1.fake", Class(dummy)},
+		{"Dummy.fake", Class(dummy)},
+	} {
+		t.Run(x.name, func(t *testing.T) {
+			got := Domain.Class(x.name)
+			assert.Equal(t, x.want, got)
+			// Round trip
+			got2 := Domain.Class(got.Name())
+			assert.Equal(t, got, got2)
 		})
 	}
 }
@@ -94,7 +113,7 @@ func TestDomain_Query_error(t *testing.T) {
 
 func TestStore_Get(t *testing.T) {
 	c := fake.NewClientBuilder().
-		WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).
+		WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(builtIn)).
 		WithObjects(
 			&corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: "fred", Namespace: "x", Labels: map[string]string{"app": "foo"}},
@@ -123,13 +142,13 @@ func TestStore_Get(t *testing.T) {
 		{NewQuery(Class(podGVK), "", "", client.MatchingLabels{"app": "foo"}, nil), []types.NamespacedName{fred, wilma}},
 	} {
 		t.Run(fmt.Sprintf("%#v", x.q), func(t *testing.T) {
-			var result graph.ListResult
+			var result mock.Result
 			err = store.Get(context.Background(), x.q, nil, &result)
 			require.NoError(t, err)
 			var got []types.NamespacedName
 			for _, v := range result {
-				o := v.(Object).(*corev1.Pod)
-				got = append(got, types.NamespacedName{Namespace: o.Namespace, Name: o.Name})
+				o := v.(Object)
+				got = append(got, types.NamespacedName{Namespace: o.GetNamespace(), Name: o.GetName()})
 			}
 			assert.ElementsMatch(t, x.want, got)
 		})
@@ -163,12 +182,12 @@ func TestStore_Get_Constraint(t *testing.T) {
 		{nil, []string{"early", "ontime", "late"}},
 	} {
 		t.Run(fmt.Sprintf("%+v", x.constraint), func(t *testing.T) {
-			var result graph.ListResult
+			var result mock.Result
 			err = store.Get(context.Background(), NewQuery(ClassOf(&corev1.Pod{}), "test", "", nil, nil), x.constraint, &result)
 			require.NoError(t, err)
 			var got []string
 			for _, v := range result {
-				got = append(got, v.(Object).(*corev1.Pod).GetName())
+				got = append(got, v.(Object).GetName())
 			}
 			assert.ElementsMatch(t, x.want, got, "%v != %v", x.want, got)
 		})

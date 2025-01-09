@@ -31,6 +31,7 @@ var (
 
 // SkipIfNoCluster call t.Skip() if not logged in to a cluster.
 func SkipIfNoCluster(t testing.TB) {
+	t.Helper()
 	clusterOnce.Do(func() {
 		log.SetLogger(logging.Log())
 		var cfg *rest.Config

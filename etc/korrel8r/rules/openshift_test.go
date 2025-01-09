@@ -11,7 +11,7 @@ import (
 )
 
 func TestConsolePluginToService(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	cp := k8s.New[consolev1.ConsolePlugin]("", "plugin")
 	cp.Spec.Backend.Service = &consolev1.ConsolePluginService{
 		Name:      "backendName",

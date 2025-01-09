@@ -10,7 +10,7 @@ import (
 )
 
 func TestKindToResource(t *testing.T) {
-	rm := testrestmapper.TestOnlyStaticRESTMapper(Scheme)
+	rm := testrestmapper.TestOnlyStaticRESTMapper(builtIn)
 	for _, tc := range [][]string{
 		{"pods", "Pod", "v1"},
 		{"pods", "Pod", ""},

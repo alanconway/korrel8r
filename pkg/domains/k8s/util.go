@@ -10,12 +10,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
+// FIXME
+
 func New[T any, PT interface {
-	Object
+	client.Object
 	*T
 }](namespace, name string) PT {
 	o := PT(new(T))
-	gvk, err := apiutil.GVKForObject(o, Scheme)
+	gvk, err := apiutil.GVKForObject(o, builtIn) // FIXME
 	if err != nil {
 		panic(err)
 	}

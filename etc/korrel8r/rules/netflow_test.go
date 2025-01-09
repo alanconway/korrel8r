@@ -14,7 +14,7 @@ import (
 )
 
 func Test_NetflowToK8S(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	for _, x := range []struct {
 		rule  string
 		start netflow.Object
@@ -53,7 +53,7 @@ func Test_NetflowToK8S(t *testing.T) {
 
 func Test_NetflowToK8S_skipped(t *testing.T) {
 	// Get expected error when fields are missing.
-	e := setup()
+	e := setupT(t)
 	for _, x := range []struct {
 		rule  string
 		start netflow.Object
@@ -91,7 +91,7 @@ func Test_NetflowToK8S_skipped(t *testing.T) {
 }
 
 func Test_NetflowFromK8S(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	for _, x := range []struct {
 		rule  string
 		start k8s.Object

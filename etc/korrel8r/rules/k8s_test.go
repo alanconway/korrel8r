@@ -17,7 +17,7 @@ import (
 )
 
 func TestLogToPod(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	for _, o := range []log.Object{
 		log.NewObject(`{"kubernetes":{"namespace_name":"foo","pod_name":"bar"}, "message":"hello"}`),
 		log.NewObject(`{"kubernetes":{"namespace_name":"default","pod_name":"baz"}, "message":"bye"}`),
@@ -37,7 +37,7 @@ func TestLogToPod(t *testing.T) {
 }
 
 func TestSelectorToPods(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 
 	// Deployment
 	labels := map[string]string{"test": "testme"}
@@ -67,7 +67,7 @@ func TestSelectorToPods(t *testing.T) {
 }
 
 func TestK8sEvent(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	pod := k8s.New[corev1.Pod]("aNamespace", "foo")
 	event := k8s.EventFor(pod, "a")
 
@@ -86,14 +86,14 @@ func TestK8sEvent(t *testing.T) {
 }
 
 func TestK8sAllToMetric(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	pod := k8s.New[corev1.Pod]("aNamespace", "foo")
 	want := metric.Query("{namespace=\"aNamespace\",pod=\"foo\"}")
 	testTraverse(t, e, k8s.ClassOf(pod), want.Class(), []korrel8r.Object{pod}, want)
 }
 
 func TestK8sPOdToAlert(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	pod := k8s.New[corev1.Pod]("aNamespace", "foo")
 	want := alert.Query{"namespace": "aNamespace", "pod": "foo"}
 	testTraverse(t, e, k8s.ClassOf(pod), want.Class(), []korrel8r.Object{pod}, want)

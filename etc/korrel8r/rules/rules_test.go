@@ -25,33 +25,41 @@ import (
 	"github.com/korrel8r/korrel8r/pkg/korrel8r"
 	"github.com/korrel8r/korrel8r/pkg/unique"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
 	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-func setup() *engine.Engine {
+func setup() (*engine.Engine, error) {
 	configs, err := config.Load("all.yaml")
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	for _, c := range configs {
 		c.Stores = nil // Use fake stores, not configured defaults.
 	}
-	c := fake.NewClientBuilder().WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(k8s.Scheme)).Build()
+	c := fake.NewClientBuilder().WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).Build()
 	s, err := k8s.NewStore(c, &rest.Config{})
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	e, err := engine.Build().
 		Domains(k8s.Domain, log.Domain, netflow.Domain, trace.Domain, alert.Domain, metric.Domain).
 		Config(configs).
 		Stores(s).Engine()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return e
+	return e, nil
+}
+
+func setupT(t *testing.T) *engine.Engine {
+	s, err := setup()
+	require.NoError(t, err)
+	return s
 }
 
 func testTraverse(t *testing.T, e *engine.Engine, start, goal korrel8r.Class, starters []korrel8r.Object, want korrel8r.Query) {
@@ -68,7 +76,10 @@ func testTraverse(t *testing.T, e *engine.Engine, start, goal korrel8r.Class, st
 }
 
 func TestMain(m *testing.M) {
-	e := setup()
+	e, err := setup()
+	if err != nil {
+		panic(err)
+	}
 	for _, r := range e.Rules() {
 		rules.Add(r.Name())
 	}

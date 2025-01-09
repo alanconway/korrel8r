@@ -18,23 +18,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"reflect"
 	"strings"
 
-	"github.com/korrel8r/korrel8r/internal/pkg/must"
+	// FIXME Clean up
+
 	"github.com/korrel8r/korrel8r/pkg/korrel8r"
 	"github.com/korrel8r/korrel8r/pkg/korrel8r/impl"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // Domain for Kubernetes resources stored in a Kube API server.
-var Domain = domain{}
+var Domain = &domain{}
 
 // Class represents a kind of kubernetes resource.
 //
@@ -90,12 +94,15 @@ var (
 )
 
 // domain implementation
-type domain struct{}
+type domain struct {
+	restMapper meta.RESTMapper
+	discover   *discovery.DiscoveryClient
+}
 
-func (d domain) Name() string        { return "k8s" }
-func (d domain) String() string      { return d.Name() }
-func (d domain) Description() string { return "Resource objects in a Kubernetes API server" }
-func (d domain) Store(_ any) (s korrel8r.Store, err error) {
+func (d *domain) Name() string        { return "k8s" }
+func (d *domain) String() string      { return d.Name() }
+func (d *domain) Description() string { return "Resource objects in a Kubernetes API server" }
+func (d *domain) Store(_ any) (s korrel8r.Store, err error) {
 	cfg, err := GetConfig()
 	if err != nil {
 		return nil, err
@@ -107,48 +114,98 @@ func (d domain) Store(_ any) (s korrel8r.Store, err error) {
 	return NewStore(c, cfg)
 }
 
-func (d domain) Class(name string) korrel8r.Class {
-	var gvk schema.GroupVersionKind
-	s := ""
-	ok := false
-	if gvk.Kind, s, ok = strings.Cut(name, "."); !ok { // Just Kind
-		return classForKind(gvk.Kind)
+func (d *domain) Class(name string) korrel8r.Class {
+	// name is one of:
+	// KIND
+	// KIND.VERSION[.GROUP]
+	// KIND.GROUP
+	k, vg, ok := strings.Cut(name, ".")
+	if !ok { // KIND
+		return d.classFor(schema.GroupVersionKind{Kind: k})
 	}
-	if gvk.Version, gvk.Group = s, ""; Scheme.Recognizes(gvk) { // Kind.Version
-		return Class(gvk)
+	if strings.HasPrefix(vg, "v") { // Try KIND.VERSION[.GROUP]
+		v, g, _ := strings.Cut(vg, ".")
+		if c := d.classFor(schema.GroupVersionKind{Kind: k, Version: v, Group: g}); c != nil {
+			return c
+		}
 	}
-	if gvk.Version, gvk.Group, ok = strings.Cut(s, "."); ok && Scheme.Recognizes(gvk) { // s == Kind.Version.Group
-		return Class(gvk)
-	}
-	gvk.Version, gvk.Group = "", s // s == Kind.Group
-	return classForGK(gvk.GroupKind())
+	return d.classFor(schema.GroupVersionKind{Kind: k, Group: vg}) // Try KIND.GROUP
 }
 
-func classForGK(gk schema.GroupKind) korrel8r.Class {
-	if versions := Scheme.VersionsForGroupKind(gk); len(versions) > 0 {
-		return Class(gk.WithVersion(versions[0].Version))
+func (d *domain) classFor(gvk schema.GroupVersionKind) korrel8r.Class {
+	if c := d.knownClass(gvk); c != nil {
+		return c
 	}
-	return nil
+	return d.incompleteClass(gvk)
 }
 
-func classForKind(kind string) korrel8r.Class {
-	for _, gv := range Scheme.PrioritizedVersionsAllGroups() {
-		gvk := gv.WithKind(kind)
-		if Scheme.Recognizes(gvk) {
-			return Class(gvk)
+func (d *domain) knownClass(gvk schema.GroupVersionKind) korrel8r.Class {
+	if c := builtInClass(gvk); c != nil { // Try built-ins first.
+		return c
+	}
+	if d.restMapper != nil {
+		m, err := d.restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
+		if err == nil {
+			return Class(m.GroupVersionKind)
 		}
 	}
 	return nil
 }
 
-func (d domain) Classes() (classes []korrel8r.Class) {
-	for gvk := range Scheme.AllKnownTypes() {
+// FIXME need unit tests for discovery client.
+func (d *domain) incompleteClass(gvk schema.GroupVersionKind) korrel8r.Class {
+	if gvk.Group == "" && d.discover != nil {
+		gl, err := d.discover.ServerGroups()
+		if err != nil {
+			return nil
+		}
+		for _, g := range gl.Groups {
+			tryGVK := gvk
+			tryGVK.Group = g.Name
+			if gvk.Version == "" {
+				tryGVK.Version = g.PreferredVersion.Version
+			}
+			if c := d.knownClass(tryGVK); c != nil {
+				return c
+			}
+		}
+	}
+	return nil
+}
+
+func builtInClass(gvk schema.GroupVersionKind) korrel8r.Class {
+	if builtIn.Recognizes(gvk) {
+		return Class(gvk)
+	}
+	if gvk.Group != "" && gvk.Version == "" { // Search for versions in group
+		if versions := builtIn.VersionsForGroupKind(gvk.GroupKind()); len(versions) > 0 {
+			gvk.Version = versions[0].Version
+			return Class(gvk)
+		}
+	}
+	if gvk.Group == "" { // Search all groups for match.
+		for _, gv := range builtIn.PrioritizedVersionsAllGroups() {
+			gvk := gv.WithKind(gvk.Kind)
+			if builtIn.Recognizes(gvk) {
+				return Class(gvk)
+			}
+		}
+	}
+	return nil
+}
+
+// Built-in kubernetes types, don't need dynamic rest mapping to reocognize them.
+var builtIn = clientgoscheme.Scheme
+
+func (d *domain) Classes() (classes []korrel8r.Class) {
+	// FIXME discovery?
+	for gvk := range builtIn.AllKnownTypes() {
 		classes = append(classes, Class(gvk))
 	}
 	return classes
 }
 
-func (d domain) Query(s string) (korrel8r.Query, error) {
+func (d *domain) Query(s string) (korrel8r.Query, error) {
 	class, query, err := impl.UnmarshalQueryString[Query](d, s)
 	if err != nil {
 		return nil, err
@@ -163,10 +220,10 @@ func ClassOf(o client.Object) Class { return Class(GroupVersionKind(o)) }
 // GroupVersionKind returns the GVK of o, which must be a pointer to a typed API resource struct.
 // Returns empty if o is not a known resource type.
 func GroupVersionKind(o client.Object) schema.GroupVersionKind {
-	if gvks, _, err := Scheme.ObjectKinds(o); err == nil {
+	if gvks, _, err := builtIn.ObjectKinds(o); err == nil {
 		return gvks[0]
 	}
-	return schema.GroupVersionKind{}
+	return o.GetObjectKind().GroupVersionKind()
 }
 
 func (c Class) ID(o korrel8r.Object) any {
@@ -185,17 +242,15 @@ func (c Class) Preview(o korrel8r.Object) string {
 	}
 }
 
-func (c Class) Domain() korrel8r.Domain { return Domain }
-func (c Class) Unmarshal(b []byte) (korrel8r.Object, error) {
-	if o, err := Scheme.New(schema.GroupVersionKind(c)); err == nil {
-		err := json.Unmarshal(b, &o)
-		return o, err
-	}
-	return nil, fmt.Errorf("unknown k8s type: %v", c)
-}
+func (c Class) Domain() korrel8r.Domain      { return Domain }
 func (c Class) Name() string                 { return fmt.Sprintf("%v.%v.%v", c.Kind, c.Version, c.Group) }
 func (c Class) String() string               { return impl.ClassString(c) }
 func (c Class) GVK() schema.GroupVersionKind { return schema.GroupVersionKind(c) }
+func (c Class) Unmarshal(b []byte) (korrel8r.Object, error) {
+	o := newObject(schema.GroupVersionKind(c))
+	err := json.Unmarshal(b, &o)
+	return o, err
+}
 
 func NewQuery(c Class, namespace, name string, labels, fields map[string]string) *Query {
 	return &Query{
@@ -207,13 +262,19 @@ func NewQuery(c Class, namespace, name string, labels, fields map[string]string)
 	}
 }
 
-func (q Query) Class() korrel8r.Class        { return q.class }
-func (q Query) Data() string                 { b, _ := json.Marshal(q); return string(b) }
-func (q Query) String() string               { return impl.QueryString(q) }
-func (q Query) GVK() schema.GroupVersionKind { return q.class.GVK() }
+func (q Query) Class() korrel8r.Class { return q.class }
+func (q Query) Data() string          { b, _ := json.Marshal(q); return string(b) }
+func (q Query) String() string        { return impl.QueryString(q) }
 
 // NewStore creates a new k8s store.
-func NewStore(c client.Client, cfg *rest.Config) (korrel8r.Store, error) {
+func NewStore(c client.Client, cfg *rest.Config) (*Store, error) {
+	// FIXME explain, move to domain. Not concurrent safe.
+	Domain.restMapper = c.RESTMapper()
+	var err error
+	Domain.discover, err = discovery.NewDiscoveryClientForConfig(cfg) // FIXME
+	if err != nil {
+		return nil, err
+	}
 	host := cfg.Host
 	if host == "" {
 		host = "localhost"
@@ -238,8 +299,9 @@ func (s *Store) Get(ctx context.Context, query korrel8r.Query, c *korrel8r.Const
 	}
 	appender := korrel8r.AppenderFunc(func(o korrel8r.Object) {
 		// Include only objects created before or during the constraint interval.
-		if c.CompareTime(o.(Object).GetCreationTimestamp().Time) <= 0 {
-			result.Append(o)
+		oo, _ := o.(Object)
+		if oo != nil && c.CompareTime(oo.GetCreationTimestamp().Time) <= 0 {
+			result.Append(oo)
 		}
 	})
 	if q.Name != "" { // Request for single object.
@@ -249,40 +311,20 @@ func (s *Store) Get(ctx context.Context, query korrel8r.Query, c *korrel8r.Const
 	}
 }
 
-func setMeta(o Object) Object {
-	gvk := must.Must1(apiutil.GVKForObject(o, Scheme))
-	o.GetObjectKind().SetGroupVersionKind(gvk)
-	return o
-}
-
 func (s *Store) getObject(ctx context.Context, q *Query, result korrel8r.Appender) error {
-	o, err := Scheme.New(q.class.GVK())
-	if err != nil {
+	o := newObject(q.class.GVK())
+	if err := s.c.Get(ctx, NamespacedName(q.Namespace, q.Name), o); err != nil {
 		return err
 	}
-	co, _ := o.(client.Object)
-	if co == nil {
-		return fmt.Errorf("invalid client.Object: %T", o)
-	}
-	err = s.c.Get(ctx, NamespacedName(q.Namespace, q.Name), co)
-	if err != nil {
-		return err
-	}
-	result.Append(setMeta(co))
+	result.Append(o)
 	return nil
 }
 
-func (s *Store) getList(ctx context.Context, q *Query, result korrel8r.Appender, c *korrel8r.Constraint) error {
+// FIXME incorrect use of builtin, need Unspecified? NEED many tests.
+func (s *Store) getList(ctx context.Context, q *Query, result korrel8r.Appender, c *korrel8r.Constraint) (err error) {
+	list := &unstructured.UnstructuredList{}
 	gvk := q.class.GVK()
-	gvk.Kind = gvk.Kind + "List"
-	o, err := Scheme.New(gvk)
-	if err != nil {
-		return err
-	}
-	list, _ := o.(client.ObjectList)
-	if list == nil {
-		return fmt.Errorf("invalid list object %T", o)
-	}
+	list.SetGroupVersionKind(gvk.GroupVersion().WithKind(gvk.Kind + "List"))
 	var opts []client.ListOption
 	if q.Namespace != "" {
 		opts = append(opts, client.InNamespace(q.Namespace))
@@ -304,13 +346,16 @@ func (s *Store) getList(ctx context.Context, q *Query, result korrel8r.Appender,
 			err = fmt.Errorf("invalid list object: %T", list)
 		}
 	}()
-	items := reflect.ValueOf(list).Elem().FieldByName("Items")
-	for i := 0; i < items.Len(); i++ {
-		result.Append(setMeta(items.Index(i).Addr().Interface().(client.Object)))
-	}
+	_ = list.EachListItem(func(o runtime.Object) error { result.Append(o); return nil })
 	return nil
 }
 
 func NamespacedName(namespace, name string) types.NamespacedName {
 	return types.NamespacedName{Namespace: namespace, Name: name}
+}
+
+func newObject(gvk schema.GroupVersionKind) Object {
+	o := &unstructured.Unstructured{}
+	o.GetObjectKind().SetGroupVersionKind(gvk)
+	return o
 }

@@ -17,7 +17,7 @@ import (
 )
 
 func TestSelectorToLogsRules(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	// Verify rules selected the correct set of start classes
 	classes := unique.NewList[korrel8r.Class]()
 	for _, r := range e.Rules() {
@@ -39,7 +39,7 @@ func TestSelectorToLogsRules(t *testing.T) {
 }
 
 func TestSelectorToLogs(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	d := k8s.New[appsv1.Deployment]("ns", "x")
 	d.Spec = appsv1.DeploymentSpec{
 		Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"a.b/c": "x"}},
@@ -49,7 +49,7 @@ func TestSelectorToLogs(t *testing.T) {
 }
 
 func TestPodToLogs(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	for _, pod := range []*corev1.Pod{
 		k8s.New[corev1.Pod]("project", "application"),
 		k8s.New[corev1.Pod]("kube-something", "infrastructure"),

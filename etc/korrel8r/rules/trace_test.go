@@ -13,7 +13,7 @@ import (
 )
 
 func Test_TraceToPod(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	for _, x := range []struct {
 		rule  string
 		start *trace.Span
@@ -38,7 +38,7 @@ func Test_TraceToPod(t *testing.T) {
 }
 
 func Test_TraceFromPod(t *testing.T) {
-	e := setup()
+	e := setupT(t)
 	for _, x := range []struct {
 		rule  string
 		start k8s.Object
