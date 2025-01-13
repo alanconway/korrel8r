@@ -54,7 +54,7 @@ type Class schema.GroupVersionKind
 // or a generated custom resource type.
 //
 // Rules templates should use capitalized Go field names rather than the lowercase JSON field names.
-type Object client.Object
+type Object = *unstructured.Unstructured
 
 // Query struct for a Kubernetes query.
 //
@@ -215,19 +215,10 @@ func (d *domain) Query(s string) (korrel8r.Query, error) {
 }
 
 // ClassOf returns the Class of o, which must be a pointer to a typed API resource struct.
-func ClassOf(o client.Object) Class { return Class(GroupVersionKind(o)) }
-
-// GroupVersionKind returns the GVK of o, which must be a pointer to a typed API resource struct.
-// Returns empty if o is not a known resource type.
-func GroupVersionKind(o client.Object) schema.GroupVersionKind {
-	if gvks, _, err := builtIn.ObjectKinds(o); err == nil {
-		return gvks[0]
-	}
-	return o.GetObjectKind().GroupVersionKind()
-}
+func ClassOf(o Object) Class { return Class(o.GetObjectKind().GroupVersionKind()) }
 
 func (c Class) ID(o korrel8r.Object) any {
-	if o, _ := o.(client.Object); o != nil {
+	if o, _ := o.(Object); o != nil {
 		return client.ObjectKeyFromObject(o)
 	}
 	return nil
@@ -247,7 +238,7 @@ func (c Class) Name() string                 { return fmt.Sprintf("%v.%v.%v", c.
 func (c Class) String() string               { return impl.ClassString(c) }
 func (c Class) GVK() schema.GroupVersionKind { return schema.GroupVersionKind(c) }
 func (c Class) Unmarshal(b []byte) (korrel8r.Object, error) {
-	o := newObject(schema.GroupVersionKind(c))
+	o := newObject(c.GVK())
 	err := json.Unmarshal(b, &o)
 	return o, err
 }
