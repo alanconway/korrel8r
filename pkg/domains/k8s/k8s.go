@@ -22,23 +22,33 @@ import (
 
 	// FIXME Clean up
 
+	"github.com/grafana/regexp"
 	"github.com/korrel8r/korrel8r/pkg/korrel8r"
 	"github.com/korrel8r/korrel8r/pkg/korrel8r/impl"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/discovery"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// Domain for Kubernetes resources stored in a Kube API server.
-var Domain = &domain{}
+// NewDomain creates a Kubernetes domain using the default kube configuration.
+func NewDomain() (*domain, error) {
+	cfg, err := GetConfig()
+	if err != nil {
+		return nil, err
+	}
+	c, err := NewClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return NewDomainWith(cfg, c), nil
+}
+
+// NewDomainWith returns a Kubernetes domain using the given configuration and client.
+func NewDomainWith(cfg *rest.Config, c client.Client) *domain { return &domain{cfg: cfg, c: c} }
 
 // Class represents a kind of kubernetes resource.
 //
@@ -46,15 +56,24 @@ var Domain = &domain{}
 // VERSION and GROUP are optional if there is no ambiguity.
 //
 // Examples: `k8s:Pod.v1`, `ks8:Pod`, `k8s:Deployment.v1.apps`, `k8s:Deployment.apps`, `k8s:Deployment`
-type Class schema.GroupVersionKind
+type Class = *class
 
-// Object is a struct type representing a Kubernetes resource.
-//
-// Object can be one of the of the standard k8s types from [k8s.io/api/core],
-// or a generated custom resource type.
-//
-// Rules templates should use capitalized Go field names rather than the lowercase JSON field names.
-type Object = *unstructured.Unstructured
+type class struct {
+	d   *domain
+	gvk schema.GroupVersionKind
+}
+
+// Object represents a Kubernetes resource as a map of its JSON representation.
+// Rules templates should use the JSON serialized field names, NOT the Go struct field names.
+type Object map[string]any
+
+// UnstructuredOf wraps o in an [unstructured.Unstructured]
+func UnstructuredOf(o Object) *unstructured.Unstructured {
+	return &unstructured.Unstructured{Object: o}
+}
+
+// ObjectOf extracts the [Object] from an [unstructured.Unstructured]
+func ObjectOf(u *unstructured.Unstructured) Object { return Object(u.Object) }
 
 // Query struct for a Kubernetes query.
 //
@@ -73,136 +92,82 @@ type Query struct {
 	class Class // class is the underlying k8s.Class object. Implied by query name prefix.
 }
 
-// Stores presents the Kubernetes API server as a korrel8r.Store.
+// Store presents the Kubernetes API server as a korrel8r.Store.
 //
-// The k8s domain automatically connects to the current cluster (as determined by kubectl),
-// no additional configuration is needed.
+// The k8s domain is alread connected to a cluster, so no additional store configuration is needed.
 //
 //	 stores:
 //		  domain: k8s
 type Store struct {
-	c    client.Client
+	d    *domain
 	base *url.URL
 }
 
 // Validate interfaces
 var (
-	_ korrel8r.Domain = Domain
-	_ korrel8r.Class  = Class{}
+	_ korrel8r.Domain = (*domain)(nil)
+	_ korrel8r.Class  = Class(nil)
 	_ korrel8r.Object = Object(nil)
 	_ korrel8r.Query  = &Query{}
 )
 
 // domain implementation
 type domain struct {
-	restMapper meta.RESTMapper
-	discover   *discovery.DiscoveryClient
+	c   client.Client
+	cfg *rest.Config
 }
 
 func (d *domain) Name() string        { return "k8s" }
 func (d *domain) String() string      { return d.Name() }
 func (d *domain) Description() string { return "Resource objects in a Kubernetes API server" }
 func (d *domain) Store(_ any) (s korrel8r.Store, err error) {
-	cfg, err := GetConfig()
-	if err != nil {
-		return nil, err
+	host := d.cfg.Host
+	if host == "" {
+		host = "localhost"
 	}
-	c, err := NewClient(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return NewStore(c, cfg)
+	base, _, err := rest.DefaultServerURL(host, d.cfg.APIPath, schema.GroupVersion{}, true)
+	return &Store{d: d, base: base}, err
 }
 
+var version = regexp.MustCompile(`^v[0-9]$`)
+
 func (d *domain) Class(name string) korrel8r.Class {
+	if name == "" {
+		return nil
+	}
 	// name is one of:
 	// KIND
 	// KIND.VERSION[.GROUP]
 	// KIND.GROUP
-	k, vg, ok := strings.Cut(name, ".")
-	if !ok { // KIND
-		return d.classFor(schema.GroupVersionKind{Kind: k})
-	}
-	if strings.HasPrefix(vg, "v") { // Try KIND.VERSION[.GROUP]
-		v, g, _ := strings.Cut(vg, ".")
-		if c := d.classFor(schema.GroupVersionKind{Kind: k, Version: v, Group: g}); c != nil {
-			return c
-		}
-	}
-	return d.classFor(schema.GroupVersionKind{Kind: k, Group: vg}) // Try KIND.GROUP
-}
-
-func (d *domain) classFor(gvk schema.GroupVersionKind) korrel8r.Class {
-	if c := d.knownClass(gvk); c != nil {
-		return c
-	}
-	return d.incompleteClass(gvk)
-}
-
-func (d *domain) knownClass(gvk schema.GroupVersionKind) korrel8r.Class {
-	if c := builtInClass(gvk); c != nil { // Try built-ins first.
-		return c
-	}
-	if d.restMapper != nil {
-		m, err := d.restMapper.RESTMapping(gvk.GroupKind(), gvk.Version)
-		if err == nil {
-			return Class(m.GroupVersionKind)
-		}
-	}
-	return nil
-}
-
-// FIXME need unit tests for discovery client.
-func (d *domain) incompleteClass(gvk schema.GroupVersionKind) korrel8r.Class {
-	if gvk.Group == "" && d.discover != nil {
-		gl, err := d.discover.ServerGroups()
-		if err != nil {
-			return nil
-		}
-		for _, g := range gl.Groups {
-			tryGVK := gvk
-			tryGVK.Group = g.Name
-			if gvk.Version == "" {
-				tryGVK.Version = g.PreferredVersion.Version
-			}
-			if c := d.knownClass(tryGVK); c != nil {
+	kvg := strings.SplitN(name, ".", 3)
+	switch len(kvg) {
+	case 1:
+		return d.ClassOf(schema.GroupVersionKind{Kind: kvg[0]})
+	case 3:
+		return d.ClassOf(schema.GroupVersionKind{Kind: kvg[0], Version: kvg[1], Group: kvg[2]})
+	case 2: // Ambiguous, could be KIND.VERSION or KIND.GROUP
+		if version.MatchString(kvg[1]) {
+			if c := d.ClassOf(schema.GroupVersionKind{Kind: kvg[0], Version: kvg[1]}); c != nil {
 				return c
 			}
 		}
+		return d.ClassOf(schema.GroupVersionKind{Kind: kvg[0], Group: kvg[1]})
+	default: // Impossible for SplitN 3
+		return nil
 	}
-	return nil
 }
 
-func builtInClass(gvk schema.GroupVersionKind) korrel8r.Class {
-	if builtIn.Recognizes(gvk) {
-		return Class(gvk)
+func (d *domain) ClassOf(gvk schema.GroupVersionKind) korrel8r.Class {
+	kinds, err := d.c.RESTMapper().KindsFor(gvk.GroupVersion().WithResource(gvk.Kind))
+	if err != nil {
+		return nil
 	}
-	if gvk.Group != "" && gvk.Version == "" { // Search for versions in group
-		if versions := builtIn.VersionsForGroupKind(gvk.GroupKind()); len(versions) > 0 {
-			gvk.Version = versions[0].Version
-			return Class(gvk)
-		}
-	}
-	if gvk.Group == "" { // Search all groups for match.
-		for _, gv := range builtIn.PrioritizedVersionsAllGroups() {
-			gvk := gv.WithKind(gvk.Kind)
-			if builtIn.Recognizes(gvk) {
-				return Class(gvk)
-			}
-		}
-	}
-	return nil
+	return &class{d: d, gvk: kinds[0]}
 }
-
-// Built-in kubernetes types, don't need dynamic rest mapping to reocognize them.
-var builtIn = clientgoscheme.Scheme
 
 func (d *domain) Classes() (classes []korrel8r.Class) {
-	// FIXME discovery?
-	for gvk := range builtIn.AllKnownTypes() {
-		classes = append(classes, Class(gvk))
-	}
-	return classes
+	// FIXME use discovery.
+	return nil
 }
 
 func (d *domain) Query(s string) (korrel8r.Query, error) {
@@ -214,17 +179,14 @@ func (d *domain) Query(s string) (korrel8r.Query, error) {
 	return &query, nil
 }
 
-// ClassOf returns the Class of o, which must be a pointer to a typed API resource struct.
-func ClassOf(o Object) Class { return Class(o.GetObjectKind().GroupVersionKind()) }
-
-func (c Class) ID(o korrel8r.Object) any {
+func (c *class) ID(o korrel8r.Object) any {
 	if o, _ := o.(Object); o != nil {
-		return client.ObjectKeyFromObject(o)
+		return client.ObjectKeyFromObject(UnstructuredOf(o))
 	}
 	return nil
 }
 
-func (c Class) Preview(o korrel8r.Object) string {
+func (c *class) Preview(o korrel8r.Object) string {
 	switch o := o.(type) {
 	case *corev1.Event:
 		return o.Message
@@ -233,15 +195,20 @@ func (c Class) Preview(o korrel8r.Object) string {
 	}
 }
 
-func (c Class) Domain() korrel8r.Domain      { return Domain }
-func (c Class) Name() string                 { return fmt.Sprintf("%v.%v.%v", c.Kind, c.Version, c.Group) }
-func (c Class) String() string               { return impl.ClassString(c) }
-func (c Class) GVK() schema.GroupVersionKind { return schema.GroupVersionKind(c) }
-func (c Class) Unmarshal(b []byte) (korrel8r.Object, error) {
-	o := newObject(c.GVK())
+func (c *class) Domain() korrel8r.Domain { return c.d }
+func (c *class) Name() string            { return fmt.Sprintf("%v.%v.%v", c.gvk.Kind, c.gvk.Version, c.gvk.Group) }
+func (c *class) String() string          { return impl.ClassString(c) }
+func (c *class) New() Object {
+	o := &unstructured.Unstructured{}
+	o.GetObjectKind().SetGroupVersionKind(c.gvk)
+	return o.Object
+}
+func (c *class) Unmarshal(b []byte) (korrel8r.Object, error) {
+	o := c.New()
 	err := json.Unmarshal(b, &o)
 	return o, err
 }
+func (c *class) GVK() schema.GroupVersionKind { return c.gvk }
 
 func NewQuery(c Class, namespace, name string, labels, fields map[string]string) *Query {
 	return &Query{
@@ -257,25 +224,8 @@ func (q Query) Class() korrel8r.Class { return q.class }
 func (q Query) Data() string          { b, _ := json.Marshal(q); return string(b) }
 func (q Query) String() string        { return impl.QueryString(q) }
 
-// NewStore creates a new k8s store.
-func NewStore(c client.Client, cfg *rest.Config) (*Store, error) {
-	// FIXME explain, move to domain. Not concurrent safe.
-	Domain.restMapper = c.RESTMapper()
-	var err error
-	Domain.discover, err = discovery.NewDiscoveryClientForConfig(cfg) // FIXME
-	if err != nil {
-		return nil, err
-	}
-	host := cfg.Host
-	if host == "" {
-		host = "localhost"
-	}
-	base, _, err := rest.DefaultServerURL(host, cfg.APIPath, schema.GroupVersion{}, true)
-	return &Store{c: c, base: base}, err
-}
-
-func (s Store) Domain() korrel8r.Domain { return Domain }
-func (s Store) Client() client.Client   { return s.c }
+func (s Store) Domain() korrel8r.Domain { return s.d }
+func (s Store) Client() client.Client   { return s.d.c }
 
 func (s *Store) Get(ctx context.Context, query korrel8r.Query, c *korrel8r.Constraint, result korrel8r.Appender) (err error) {
 	defer func() {
@@ -291,8 +241,8 @@ func (s *Store) Get(ctx context.Context, query korrel8r.Query, c *korrel8r.Const
 	appender := korrel8r.AppenderFunc(func(o korrel8r.Object) {
 		// Include only objects created before or during the constraint interval.
 		oo, _ := o.(Object)
-		if oo != nil && c.CompareTime(oo.GetCreationTimestamp().Time) <= 0 {
-			result.Append(oo)
+		if oo != nil && c.CompareTime(UnstructuredOf(oo).GetCreationTimestamp().Time) <= 0 {
+			result.Append(o)
 		}
 	})
 	if q.Name != "" { // Request for single object.
@@ -303,18 +253,17 @@ func (s *Store) Get(ctx context.Context, query korrel8r.Query, c *korrel8r.Const
 }
 
 func (s *Store) getObject(ctx context.Context, q *Query, result korrel8r.Appender) error {
-	o := newObject(q.class.GVK())
-	if err := s.c.Get(ctx, NamespacedName(q.Namespace, q.Name), o); err != nil {
+	u := UnstructuredOf(q.class.New())
+	if err := s.d.c.Get(ctx, types.NamespacedName{Namespace: q.Namespace, Name: q.Name}, u); err != nil {
 		return err
 	}
-	result.Append(o)
+	result.Append(ObjectOf(u))
 	return nil
 }
 
-// FIXME incorrect use of builtin, need Unspecified? NEED many tests.
 func (s *Store) getList(ctx context.Context, q *Query, result korrel8r.Appender, c *korrel8r.Constraint) (err error) {
-	list := &unstructured.UnstructuredList{}
 	gvk := q.class.GVK()
+	list := &unstructured.UnstructuredList{}
 	list.SetGroupVersionKind(gvk.GroupVersion().WithKind(gvk.Kind + "List"))
 	var opts []client.ListOption
 	if q.Namespace != "" {
@@ -329,7 +278,7 @@ func (s *Store) getList(ctx context.Context, q *Query, result korrel8r.Appender,
 	if limit := c.GetLimit(); limit > 0 {
 		opts = append(opts, client.Limit(int64(limit)))
 	}
-	if err := s.c.List(ctx, list, opts...); err != nil {
+	if err := s.d.c.List(ctx, list, opts...); err != nil {
 		return err
 	}
 	defer func() { // Handle reflect panics.
@@ -337,16 +286,8 @@ func (s *Store) getList(ctx context.Context, q *Query, result korrel8r.Appender,
 			err = fmt.Errorf("invalid list object: %T", list)
 		}
 	}()
-	_ = list.EachListItem(func(o runtime.Object) error { result.Append(o); return nil })
+	for i := range list.Items {
+		result.Append(ObjectOf(&list.Items[i]))
+	}
 	return nil
-}
-
-func NamespacedName(namespace, name string) types.NamespacedName {
-	return types.NamespacedName{Namespace: namespace, Name: name}
-}
-
-func newObject(gvk schema.GroupVersionKind) Object {
-	o := &unstructured.Unstructured{}
-	o.GetObjectKind().SetGroupVersionKind(gvk)
-	return o
 }

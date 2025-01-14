@@ -12,7 +12,6 @@ import (
 	"github.com/korrel8r/korrel8r/pkg/korrel8r"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
@@ -25,28 +24,36 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+var (
+	d          = NewDomainWith(&rest.Config{}, fake.NewClientBuilder().WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).Build())
+	namespace  = &class{d: d, gvk: schema.GroupVersionKind{Kind: "Namespace", Version: "v1"}}
+	pod        = &class{d: d, gvk: schema.GroupVersionKind{Kind: "Pod", Version: "v1"}}
+	deployment = &class{d: d, gvk: schema.GroupVersionKind{Kind: "Deployment", Version: "v1", Group: "apps"}}
+)
+
 func TestDomain_Class_builtin(t *testing.T) {
 	for _, x := range []struct {
 		name string
-		want korrel8r.Class
+		want Class
 	}{
-		{"Namespace", ClassOf(&corev1.Namespace{})},           // Kind only
-		{"Namespace.", ClassOf(&corev1.Namespace{})},          // Kind and version
-		{"Namespace.v1.", ClassOf(&corev1.Namespace{})},       // Kind, version and group
-		{"Pod", ClassOf(&corev1.Pod{})},                       // Kind only
-		{"Pod.", ClassOf(&corev1.Pod{})},                      // Kind and group (core group is named "")
-		{"Pod.v1", ClassOf(&corev1.Pod{})},                    // Kind, version, implied core group.
-		{"Pod.v1.", ClassOf(&corev1.Pod{})},                   // Kind, version, ""
-		{"Deployment", ClassOf(&appsv1.Deployment{})},         // Kind only
-		{"Deployment.apps", ClassOf(&appsv1.Deployment{})},    // Kind and group
-		{"Deployment.v1.apps", ClassOf(&appsv1.Deployment{})}, // Kind, version and group
+		{"Namespace.v1.", namespace},       // Kind, version and group
+		{"Namespace.", namespace},          // Kind and version
+		{"Namespace", namespace},           // Kind only
+		{"Pod.v1.", pod},                   // Kind, version, ""
+		{"Pod.v1", pod},                    // Kind, version, implied core group.
+		{"Pod.", pod},                      // Kind and group (core group is named "")
+		{"Pod", pod},                       // Kind only
+		{"Deployment.v1.apps", deployment}, // Kind, version and group
+		{"Deployment.apps", deployment},    // Kind and group
+		{"Deployment", deployment},         // Kind only
 	} {
 		t.Run(x.name, func(t *testing.T) {
-			got := Domain.Class(x.name)
-			assert.Equal(t, x.want, got)
-			// Round trip
-			got2 := Domain.Class(got.Name())
-			assert.Equal(t, got, got2)
+			got := d.Class(x.name)
+			if assert.Equal(t, x.want, got, "from: %v", x.name) {
+				// Round trip
+				got2 := d.Class(got.Name())
+				assert.Equal(t, got, got2)
+			}
 		})
 	}
 }
@@ -55,20 +62,20 @@ func TestDomain_Class_restmapper(t *testing.T) {
 	rm := meta.NewDefaultRESTMapper([]schema.GroupVersion{schema.GroupVersion{Group: "fake", Version: "v1"}})
 	dummy := schema.GroupVersionKind{Group: "fake", Version: "v1", Kind: "Dummy"}
 	rm.Add(dummy, meta.RESTScopeNamespace)
-	Domain.restMapper = rm
+	d := NewDomainWith(&rest.Config{}, fake.NewClientBuilder().WithRESTMapper(rm).Build())
 
 	for _, x := range []struct {
 		name string
 		want korrel8r.Class
 	}{
-		{"Dummy.v1.fake", Class(dummy)},
-		{"Dummy.fake", Class(dummy)},
+		{"Dummy.v1.fake", d.ClassOf(dummy)},
+		{"Dummy.fake", d.ClassOf(dummy)},
 	} {
 		t.Run(x.name, func(t *testing.T) {
-			got := Domain.Class(x.name)
+			got := d.Class(x.name)
 			assert.Equal(t, x.want, got)
 			// Round trip
-			got2 := Domain.Class(got.Name())
+			got2 := d.Class(got.Name())
 			assert.Equal(t, got, got2)
 		})
 	}
@@ -79,14 +86,14 @@ func TestDomain_Query(t *testing.T) {
 		s    string
 		want korrel8r.Query
 	}{
-		{`k8s:Namespace:{"name":"foo"}`, NewQuery(ClassOf(&corev1.Namespace{}), "", "foo", nil, nil)},
-		{`k8s:Namespace:{name: foo}`, NewQuery(ClassOf(&corev1.Namespace{}), "", "foo", nil, nil)},
-		{`k8s:Pod:{namespace: foo, name: bar}`, NewQuery(ClassOf(&corev1.Pod{}), "foo", "bar", nil, nil)},
+		{`k8s:Namespace:{"name":"foo"}`, NewQuery(namespace, "", "foo", nil, nil)},
+		{`k8s:Namespace:{name: foo}`, NewQuery(namespace, "", "foo", nil, nil)},
+		{`k8s:Pod:{namespace: foo, name: bar}`, NewQuery(pod, "foo", "bar", nil, nil)},
 		{`k8s:Pod:{namespace: foo, name: bar, labels: { a: b }, fields: { c: d }}`,
-			NewQuery(ClassOf(&corev1.Pod{}), "foo", "bar", map[string]string{"a": "b"}, map[string]string{"c": "d"})},
+			NewQuery(pod, "foo", "bar", map[string]string{"a": "b"}, map[string]string{"c": "d"})},
 	} {
 		t.Run(x.s, func(t *testing.T) {
-			got, err := Domain.Query(x.s)
+			got, err := d.Query(x.s)
 			if assert.NoError(t, err) {
 				assert.Equal(t, x.want, got)
 			}
@@ -104,7 +111,7 @@ func TestDomain_Query_error(t *testing.T) {
 		{`k8s:Namespace:{name:"foo"}`, "unknown field"},
 	} {
 		t.Run(x.s, func(t *testing.T) {
-			_, err := Domain.Query(x.s)
+			_, err := d.Query(x.s)
 			assert.ErrorContains(t, err, x.err)
 		})
 	}
@@ -113,7 +120,7 @@ func TestDomain_Query_error(t *testing.T) {
 
 func TestStore_Get(t *testing.T) {
 	c := fake.NewClientBuilder().
-		WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(builtIn)).
+		WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).
 		WithObjects(
 			&corev1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: "fred", Namespace: "x", Labels: map[string]string{"app": "foo"}},
@@ -125,21 +132,21 @@ func TestStore_Get(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "wilma", Namespace: "y", Labels: map[string]string{"app": "foo"}},
 			},
 		).Build()
-	store, err := NewStore(c, &rest.Config{})
+	d := NewDomainWith(&rest.Config{}, c)
+	store, err := d.Store(nil)
 	require.NoError(t, err)
 	var (
 		fred   = types.NamespacedName{Namespace: "x", Name: "fred"}
 		barney = types.NamespacedName{Namespace: "x", Name: "barney"}
 		wilma  = types.NamespacedName{Namespace: "y", Name: "wilma"}
 	)
-	podGVK := ClassOf(&corev1.Pod{}).GVK()
 	for _, x := range []struct {
 		q    korrel8r.Query
 		want []types.NamespacedName
 	}{
-		{NewQuery(Class(podGVK), "x", "fred", nil, nil), []types.NamespacedName{fred}},
-		{NewQuery(Class(podGVK), "x", "", nil, nil), []types.NamespacedName{fred, barney}},
-		{NewQuery(Class(podGVK), "", "", client.MatchingLabels{"app": "foo"}, nil), []types.NamespacedName{fred, wilma}},
+		{NewQuery(pod, "x", "fred", nil, nil), []types.NamespacedName{fred}},
+		{NewQuery(pod, "x", "", nil, nil), []types.NamespacedName{fred, barney}},
+		{NewQuery(pod, "", "", client.MatchingLabels{"app": "foo"}, nil), []types.NamespacedName{fred, wilma}},
 	} {
 		t.Run(fmt.Sprintf("%#v", x.q), func(t *testing.T) {
 			var result mock.Result
@@ -148,7 +155,10 @@ func TestStore_Get(t *testing.T) {
 			var got []types.NamespacedName
 			for _, v := range result {
 				o := v.(Object)
-				got = append(got, types.NamespacedName{Namespace: o.GetNamespace(), Name: o.GetName()})
+				got = append(got, types.NamespacedName{
+					Namespace: UnstructuredOf(o).GetNamespace(),
+					Name:      UnstructuredOf(o).GetName(),
+				})
 			}
 			assert.ElementsMatch(t, x.want, got)
 		})
@@ -169,7 +179,8 @@ func TestStore_Get_Constraint(t *testing.T) {
 	c := fake.NewClientBuilder().
 		WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).
 		WithObjects(early, ontime, late).Build()
-	store, err := NewStore(c, &rest.Config{})
+	d := NewDomainWith(&rest.Config{}, c)
+	store, err := d.Store(nil)
 	require.NoError(t, err)
 
 	for _, x := range []struct {
@@ -183,11 +194,11 @@ func TestStore_Get_Constraint(t *testing.T) {
 	} {
 		t.Run(fmt.Sprintf("%+v", x.constraint), func(t *testing.T) {
 			var result mock.Result
-			err = store.Get(context.Background(), NewQuery(ClassOf(&corev1.Pod{}), "test", "", nil, nil), x.constraint, &result)
+			err = store.Get(context.Background(), NewQuery(pod, "test", "", nil, nil), x.constraint, &result)
 			require.NoError(t, err)
 			var got []string
 			for _, v := range result {
-				got = append(got, v.(Object).GetName())
+				got = append(got, UnstructuredOf(v.(Object)).GetName())
 			}
 			assert.ElementsMatch(t, x.want, got, "%v != %v", x.want, got)
 		})

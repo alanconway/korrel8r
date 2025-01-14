@@ -62,8 +62,10 @@ func (f *Fixture) ClusterEngine(t testing.TB) *engine.Engine {
 	out, err := exec.Command("git", "root").Output()
 	require.NoError(t, err)
 	config := filepath.Join(strings.TrimSpace(string(out)), "etc", "korrel8r", "openshift-route.yaml")
+	k8sDomain, err := k8s.NewDomain()
+	require.NoError(t, err)
 	e, err := engine.Build().
-		Domains(k8s.Domain, log.Domain, netflow.Domain, trace.Domain, alert.Domain, metric.Domain).
+		Domains(k8sDomain, log.Domain, netflow.Domain, trace.Domain, alert.Domain, metric.Domain).
 		ConfigFile(config).
 		Engine()
 	require.NoError(t, err)

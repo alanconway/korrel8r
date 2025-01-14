@@ -18,6 +18,7 @@ import (
 
 func TestLogToPod(t *testing.T) {
 	e := setupT(t)
+	kd := e.Domain("k8s")
 	for _, o := range []log.Object{
 		log.NewObject(`{"kubernetes":{"namespace_name":"foo","pod_name":"bar"}, "message":"hello"}`),
 		log.NewObject(`{"kubernetes":{"namespace_name":"default","pod_name":"baz"}, "message":"bye"}`),
@@ -30,8 +31,9 @@ func TestLogToPod(t *testing.T) {
 			if log.Preview(o) == "default" {
 				start = log.Infrastructure
 			}
-			want := k8s.NewQuery(k8s.ClassOf(&corev1.Pod{}), namespace, name, nil, nil)
-			testTraverse(t, e, start, k8s.ClassOf(&corev1.Pod{}), []korrel8r.Object{o}, want)
+			pod := kd.Class("Pod")
+			want := k8s.NewQuery(pod.(k8s.Class), namespace, name, nil, nil)
+			testTraverse(t, e, start, kd.Class("Pod"), []korrel8r.Object{o}, want)
 		})
 	}
 }
@@ -97,4 +99,16 @@ func TestK8sPOdToAlert(t *testing.T) {
 	pod := k8s.New[corev1.Pod]("aNamespace", "foo")
 	want := alert.Query{"namespace": "aNamespace", "pod": "foo"}
 	testTraverse(t, e, k8s.ClassOf(pod), want.Class(), []korrel8r.Object{pod}, want)
+}
+
+func EventFor(o client.Object, name string) *corev1.Event {
+	gvk := o.GetObjectKind().GroupVersionKind()
+	e := New[corev1.Event](name, o.GetNamespace())
+	e.InvolvedObject = corev1.ObjectReference{
+		Kind:       gvk.Kind,
+		Namespace:  o.GetNamespace(),
+		Name:       o.GetName(),
+		APIVersion: gvk.GroupVersion().String(),
+	}
+	return e
 }

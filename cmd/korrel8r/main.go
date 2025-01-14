@@ -100,7 +100,7 @@ func newEngine() (*engine.Engine, config.Configs) {
 	}
 	c := must.Must1(config.Load(*configFlag))
 	e := must.Must1(engine.Build().
-		Domains(k8s.Domain, logdomain.Domain, netflow.Domain, trace.Domain, alert.Domain, metric.Domain, mock.Domain("mock")).
+		Domains(must.Must1(k8s.NewDomain()), logdomain.Domain, netflow.Domain, trace.Domain, alert.Domain, metric.Domain, mock.Domain("mock")).
 		Config(c).
 		Engine())
 	return e, c

@@ -1,8 +1,9 @@
 = Korrel8r User Guide
 Korrel8r Project <https://github.com/korrel8r/korrel8r>
+include::attributes.adoc[]
 :doctype: book
 :toc: left
-include::attributes.adoc[]
+:favicon: ./images/icon.svg
 
 Navigating between cluster resources and observable signals.
 
@@ -139,7 +140,7 @@ To connect to your service from outside the cluster, you can expose it with an '
 [source,terminal]
 ----
 oc apply -k github.com/korrel8r/korrel8r/config/route?version=main
-HOST=$(oc get route/korrel8r -n korrel8r -o template={{.Spec.Host}}
+HOST=$(oc get route/korrel8r -n korrel8r -o template={{.spec.host}}
 ----
 
 You can use the <<_clients>> to test your service at `$HOST`.
@@ -379,11 +380,11 @@ stores:
   - domain: log
     lokiStack: <-
       {{$r := get "k8s:Route:{namespace: openshift-logging, name: logging-loki}" -}} <1>
-      https://{{ (first $r).Spec.Host -}} <2>
+      https://{{ (first $r).spec.Host -}} <2>
 ----
 
 <1> Get a list of routes in "openshift-logging" named "logging-loki".
-<2> Use the .Spec.Host field of the first route as the host for the store URL.
+<2> Use the .spec.Host field of the first route as the host for the store URL.
 
 === rules
 

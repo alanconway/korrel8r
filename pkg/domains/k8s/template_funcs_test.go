@@ -7,10 +7,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
+	"k8s.io/client-go/kubernetes/scheme"
 )
 
 func TestKindToResource(t *testing.T) {
-	rm := testrestmapper.TestOnlyStaticRESTMapper(builtIn)
+	rm := testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)
 	for _, tc := range [][]string{
 		{"pods", "Pod", "v1"},
 		{"pods", "Pod", ""},

@@ -7,10 +7,17 @@ import (
 
 	"github.com/korrel8r/korrel8r/internal/pkg/test/domain"
 	"github.com/korrel8r/korrel8r/pkg/domains/k8s"
-	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-var fixture = domain.Fixture{Query: k8s.NewQuery(k8s.ClassOf(&corev1.Pod{}), "", "", nil, nil)}
+var (
+	d = k8s.NewDomainWith(&rest.Config{}, fake.NewClientBuilder().WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).Build())
 
-func TestLK8sDomain(t *testing.T)     { fixture.Test(t) }
+	fixture = domain.Fixture{Query: k8s.NewQuery(d.Class("Pod").(k8s.Class), "", "", nil, nil)}
+)
+
+func TestK8sDomain(t *testing.T)      { fixture.Test(t) }
 func BenchmarkK8sDomain(b *testing.B) { fixture.Benchmark(b) }
