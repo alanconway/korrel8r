@@ -8,9 +8,6 @@ import (
 	"github.com/korrel8r/korrel8r/pkg/domains/k8s"
 	"github.com/korrel8r/korrel8r/pkg/domains/netflow"
 	"github.com/stretchr/testify/assert"
-	appv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func Test_NetflowToK8S(t *testing.T) {
@@ -92,6 +89,7 @@ func Test_NetflowToK8S_skipped(t *testing.T) {
 
 func Test_NetflowFromK8S(t *testing.T) {
 	e := setupT(t)
+	foobar := k8s.Object{"name": "foo", "namespace": "bar"}
 	for _, x := range []struct {
 		rule  string
 		start k8s.Object
@@ -99,22 +97,22 @@ func Test_NetflowFromK8S(t *testing.T) {
 	}{
 		{
 			rule:  "K8sSrcToNetflow",
-			start: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"}},
+			start: k8s.Object{"kind": "Pod", "metadata": foobar},
 			want:  `netflow:network:{SrcK8S_Type="", SrcK8S_Namespace="bar"} | json | SrcK8S_Name="foo"`,
 		},
 		{
 			rule:  "K8sSrcOwnerToNetflow",
-			start: &appv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"}},
+			start: k8s.Object{"kind": "Deployment.app", "metadata": foobar},
 			want:  `netflow:network:{SrcK8S_Namespace="bar", SrcK8S_OwnerName="foo"}`,
 		},
 		{
 			rule:  "K8sDstToNetflow",
-			start: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"}},
+			start: k8s.Object{"kind": "Pod", "metadata": foobar},
 			want:  `netflow:network:{DstK8S_Type="", DstK8S_Namespace="bar"} | json | DstK8S_Name="foo"`,
 		},
 		{
 			rule:  "K8sDstOwnerToNetflow",
-			start: &appv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"}},
+			start: k8s.Object{"kind": "Deployment.app", "metadata": foobar},
 			want:  `netflow:network:{DstK8S_Namespace="bar", DstK8S_OwnerName="foo"}`,
 		},
 	} {

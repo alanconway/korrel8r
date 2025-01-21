@@ -63,52 +63,44 @@ func TestSelectorToPods(t *testing.T) {
 			ObjectMeta: podx.ObjectMeta,
 			Spec:       podx.Spec,
 		}}
-	class := k8s.ClassOf(podx)
-	testTraverse(t, e, k8s.ClassOf(d), class, []korrel8r.Object{d},
-		k8s.NewQuery(class, "ns", "", client.MatchingLabels{"test": "testme"}, nil))
+	kd := e.Domain("k8s")
+	class := kd.Class("Pod")
+	testTraverse(t, e, kd.Class("Deployment.apps"), class, []korrel8r.Object{d},
+		k8s.NewQuery(class.(k8s.Class), "ns", "", client.MatchingLabels{"test": "testme"}, nil))
 }
 
 func TestK8sEvent(t *testing.T) {
 	e := setupT(t)
+	kd := e.Domain("k8s")
 	pod := k8s.New[corev1.Pod]("aNamespace", "foo")
 	event := k8s.EventFor(pod, "a")
 
 	t.Run("PodToEvent", func(t *testing.T) {
 		want := k8s.NewQuery(
-			k8s.ClassOf(&corev1.Event{}), "", "", nil,
+			kd.Class("Event.v1.").(k8s.Class), "", "", nil,
 			client.MatchingFields{
 				"involvedObject.apiVersion": "v1", "involvedObject.kind": "Pod",
 				"involvedObject.name": "foo", "involvedObject.namespace": "aNamespace"})
-		testTraverse(t, e, k8s.ClassOf(pod), k8s.ClassOf(event), []korrel8r.Object{pod}, want)
+		testTraverse(t, e, kd.Class("Pod"), kd.Class("Event.v1."), []korrel8r.Object{pod}, want)
 	})
 	t.Run("EventToPod", func(t *testing.T) {
-		want := k8s.NewQuery(k8s.ClassOf(pod), "aNamespace", "foo", nil, nil)
-		testTraverse(t, e, k8s.ClassOf(event), k8s.ClassOf(pod), []korrel8r.Object{event}, want)
+		want := k8s.NewQuery(kd.Class("Pod").(k8s.Class), "aNamespace", "foo", nil, nil)
+		testTraverse(t, e, kd.Class("Event.v1."), kd.Class("Pod"), []korrel8r.Object{event}, want)
 	})
 }
 
 func TestK8sAllToMetric(t *testing.T) {
 	e := setupT(t)
+	kd := e.Domain("k8s").(*k8s.Domain)
 	pod := k8s.New[corev1.Pod]("aNamespace", "foo")
 	want := metric.Query("{namespace=\"aNamespace\",pod=\"foo\"}")
-	testTraverse(t, e, k8s.ClassOf(pod), want.Class(), []korrel8r.Object{pod}, want)
+	testTraverse(t, e, kd.Class("Pod"), want.Class(), []korrel8r.Object{pod}, want)
 }
 
 func TestK8sPOdToAlert(t *testing.T) {
 	e := setupT(t)
+	kd := e.Domain("k8s").(*k8s.Domain)
 	pod := k8s.New[corev1.Pod]("aNamespace", "foo")
 	want := alert.Query{"namespace": "aNamespace", "pod": "foo"}
-	testTraverse(t, e, k8s.ClassOf(pod), want.Class(), []korrel8r.Object{pod}, want)
-}
-
-func EventFor(o client.Object, name string) *corev1.Event {
-	gvk := o.GetObjectKind().GroupVersionKind()
-	e := New[corev1.Event](name, o.GetNamespace())
-	e.InvolvedObject = corev1.ObjectReference{
-		Kind:       gvk.Kind,
-		Namespace:  o.GetNamespace(),
-		Name:       o.GetName(),
-		APIVersion: gvk.GroupVersion().String(),
-	}
-	return e
+	testTraverse(t, e, kd.Class("Pod"), want.Class(), []korrel8r.Object{pod}, want)
 }

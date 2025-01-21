@@ -35,7 +35,7 @@ import (
 )
 
 // NewDomain creates a Kubernetes domain using the default kube configuration.
-func NewDomain() (*domain, error) {
+func NewDomain() (korrel8r.Domain, error) {
 	cfg, err := GetConfig()
 	if err != nil {
 		return nil, err
@@ -48,7 +48,7 @@ func NewDomain() (*domain, error) {
 }
 
 // NewDomainWith returns a Kubernetes domain using the given configuration and client.
-func NewDomainWith(cfg *rest.Config, c client.Client) *domain { return &domain{cfg: cfg, c: c} }
+func NewDomainWith(cfg *rest.Config, c client.Client) *Domain { return &Domain{cfg: cfg, c: c} }
 
 // Class represents a kind of kubernetes resource.
 //
@@ -59,7 +59,7 @@ func NewDomainWith(cfg *rest.Config, c client.Client) *domain { return &domain{c
 type Class = *class
 
 type class struct {
-	d   *domain
+	d   *Domain
 	gvk schema.GroupVersionKind
 }
 
@@ -99,28 +99,28 @@ type Query struct {
 //	 stores:
 //		  domain: k8s
 type Store struct {
-	d    *domain
+	d    *Domain
 	base *url.URL
 }
 
 // Validate interfaces
 var (
-	_ korrel8r.Domain = (*domain)(nil)
+	_ korrel8r.Domain = (*Domain)(nil)
 	_ korrel8r.Class  = Class(nil)
 	_ korrel8r.Object = Object(nil)
 	_ korrel8r.Query  = &Query{}
 )
 
-// domain implementation
-type domain struct {
+// FIXME documentdomain implementation
+type Domain struct {
 	c   client.Client
 	cfg *rest.Config
 }
 
-func (d *domain) Name() string        { return "k8s" }
-func (d *domain) String() string      { return d.Name() }
-func (d *domain) Description() string { return "Resource objects in a Kubernetes API server" }
-func (d *domain) Store(_ any) (s korrel8r.Store, err error) {
+func (d *Domain) Name() string        { return "k8s" }
+func (d *Domain) String() string      { return d.Name() }
+func (d *Domain) Description() string { return "Resource objects in a Kubernetes API server" }
+func (d *Domain) Store(storeConfig any) (s korrel8r.Store, err error) {
 	host := d.cfg.Host
 	if host == "" {
 		host = "localhost"
@@ -131,7 +131,7 @@ func (d *domain) Store(_ any) (s korrel8r.Store, err error) {
 
 var version = regexp.MustCompile(`^v[0-9]$`)
 
-func (d *domain) Class(name string) korrel8r.Class {
+func (d *Domain) Class(name string) korrel8r.Class {
 	if name == "" {
 		return nil
 	}
@@ -157,7 +157,7 @@ func (d *domain) Class(name string) korrel8r.Class {
 	}
 }
 
-func (d *domain) ClassOf(gvk schema.GroupVersionKind) korrel8r.Class {
+func (d *Domain) ClassOf(gvk schema.GroupVersionKind) korrel8r.Class {
 	kinds, err := d.c.RESTMapper().KindsFor(gvk.GroupVersion().WithResource(gvk.Kind))
 	if err != nil {
 		return nil
@@ -165,12 +165,12 @@ func (d *domain) ClassOf(gvk schema.GroupVersionKind) korrel8r.Class {
 	return &class{d: d, gvk: kinds[0]}
 }
 
-func (d *domain) Classes() (classes []korrel8r.Class) {
+func (d *Domain) Classes() (classes []korrel8r.Class) {
 	// FIXME use discovery.
 	return nil
 }
 
-func (d *domain) Query(s string) (korrel8r.Query, error) {
+func (d *Domain) Query(s string) (korrel8r.Query, error) {
 	class, query, err := impl.UnmarshalQueryString[Query](d, s)
 	if err != nil {
 		return nil, err
@@ -196,19 +196,21 @@ func (c *class) Preview(o korrel8r.Object) string {
 }
 
 func (c *class) Domain() korrel8r.Domain { return c.d }
-func (c *class) Name() string            { return fmt.Sprintf("%v.%v.%v", c.gvk.Kind, c.gvk.Version, c.gvk.Group) }
-func (c *class) String() string          { return impl.ClassString(c) }
+func (c *class) Name() string {
+	return fmt.Sprintf("%v.%v.%v", c.gvk.Kind, c.gvk.Version, c.gvk.Group)
+}
+func (c *class) String() string { return impl.ClassString(c) }
 func (c *class) New() Object {
 	o := &unstructured.Unstructured{}
 	o.GetObjectKind().SetGroupVersionKind(c.gvk)
 	return o.Object
 }
+func (c *class) GVK() schema.GroupVersionKind { return c.gvk }
 func (c *class) Unmarshal(b []byte) (korrel8r.Object, error) {
 	o := c.New()
 	err := json.Unmarshal(b, &o)
 	return o, err
 }
-func (c *class) GVK() schema.GroupVersionKind { return c.gvk }
 
 func NewQuery(c Class, namespace, name string, labels, fields map[string]string) *Query {
 	return &Query{

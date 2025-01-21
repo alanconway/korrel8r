@@ -9,7 +9,7 @@ type Config struct {
 	Rules []Rule `json:"rules,omitempty"`
 
 	// Aliases defines short names for groups of related classes.
-	Aliases []Class `json:"aliases,omitempty"`
+	Aliases []Alias `json:"aliases,omitempty"`
 
 	// Stores is a list of store configurations.
 	Stores []Store `json:"stores,omitempty"`
@@ -84,8 +84,8 @@ type ResultSpec struct {
 	Query string `json:"query"`
 }
 
-// Class defines a shortcut name for a set of existing classes.
-type Class struct {
+// Alias defines a shortcut name for a set of existing classes.
+type Alias struct {
 	// Name is the short name for a group of classes.
 	Name string `json:"name"`
 	// Domain of the classes, all must be in the same domain.

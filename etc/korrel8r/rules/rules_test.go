@@ -42,12 +42,10 @@ func setup() (*engine.Engine, error) {
 		c.Stores = nil // Use fake stores, not configured defaults.
 	}
 	c := fake.NewClientBuilder().WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).Build()
-	s, err := k8s.NewStore(c, &rest.Config{})
-	if err != nil {
-		return nil, err
-	}
+	kd := k8s.NewDomainWith(&rest.Config{}, c)
+	s, _ := kd.Store(nil)
 	e, err := engine.Build().
-		Domains(k8s.Domain, log.Domain, netflow.Domain, trace.Domain, alert.Domain, metric.Domain).
+		Domains(kd, log.Domain, netflow.Domain, trace.Domain, alert.Domain, metric.Domain).
 		Config(configs).
 		Stores(s).Engine()
 	if err != nil {

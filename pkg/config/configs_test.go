@@ -49,7 +49,7 @@ func TestLoad_bad_tuning(t *testing.T) {
 func TestConfigs_Expand(t *testing.T) {
 	c := Configs{
 		{
-			Aliases: []Class{
+			Aliases: []Alias{
 				{Name: "x", Domain: "foo", Classes: []string{"p", "q"}},
 				{Name: "y", Domain: "foo", Classes: []string{"x", "a"}},
 				{Name: "z", Domain: "foo", Classes: []string{"u", "v"}},
@@ -83,7 +83,7 @@ func TestConfigs_Expand(t *testing.T) {
 func TestConfigs_Expand_sameGroupDifferentDomain(t *testing.T) {
 	c := Configs{
 		{
-			Aliases: []Class{
+			Aliases: []Alias{
 				{Name: "x", Domain: "foo", Classes: []string{"p", "q"}},
 				{Name: "x", Domain: "bar", Classes: []string{"bbq"}},
 			},

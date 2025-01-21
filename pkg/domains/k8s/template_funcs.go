@@ -16,7 +16,7 @@ import (
 )
 
 // TemplateFuncs for this domain. See package description.
-func (d *domain) TemplateFuncs() map[string]any {
+func (d *Domain) TemplateFuncs() map[string]any {
 	return map[string]any{
 		"k8sClass": func(apiVersion, kind string) korrel8r.Class {
 			return d.ClassOf(schema.FromAPIVersionAndKind(apiVersion, kind))

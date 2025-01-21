@@ -115,14 +115,14 @@ func (l *loader) load(source string) error {
 // map of domain names to alias names with class name lists
 type aliasMap map[string]map[string][]string
 
-func (am aliasMap) Add(c Class) bool {
-	if am[c.Domain][c.Name] != nil {
+func (am aliasMap) Add(a Alias) bool {
+	if am[a.Domain][a.Name] != nil {
 		return false // Already present.
 	}
-	if am[c.Domain] == nil { // Create domain map if missing.
-		am[c.Domain] = map[string][]string{}
+	if am[a.Domain] == nil { // Create domain map if missing.
+		am[a.Domain] = map[string][]string{}
 	}
-	am[c.Domain][c.Name] = c.Classes
+	am[a.Domain][a.Name] = a.Classes
 	return true
 }
 

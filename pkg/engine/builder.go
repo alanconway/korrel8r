@@ -8,6 +8,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"text/template"
 
@@ -30,7 +31,7 @@ type Builder struct {
 func Build() *Builder {
 	e := &Engine{
 		domains:     map[string]korrel8r.Domain{},
-		stores:      map[korrel8r.Domain]*stores{},
+		stores:      map[string]*stores{},
 		rulesByName: map[string]korrel8r.Rule{},
 	}
 	e.templateFuncs = template.FuncMap{"query": e.query}
@@ -44,7 +45,7 @@ func (b *Builder) Domains(domains ...korrel8r.Domain) *Builder {
 		case d: // Already present
 		case nil:
 			b.e.domains[d.Name()] = d
-			b.e.stores[d] = newStores(b.e, d)
+			b.e.stores[d.Name()] = newStores(b.e, d)
 			if tf, ok := d.(interface{ TemplateFuncs() map[string]any }); ok {
 				maps.Copy(b.e.templateFuncs, tf.TemplateFuncs())
 			}
@@ -66,7 +67,7 @@ func (b *Builder) Stores(stores ...korrel8r.Store) *Builder {
 		if b.err != nil {
 			return b
 		}
-		b.err = b.e.stores[d].Add(&store{domain: d, Store: s})
+		b.err = b.e.stores[d.Name()].Add(&store{domain: d, Store: s})
 	}
 
 	return b
@@ -81,7 +82,7 @@ func (b *Builder) StoreConfigs(storeConfigs ...config.Store) *Builder {
 		if b.err != nil {
 			return b
 		}
-		b.err = b.e.stores[d].Add(&store{domain: d, Original: maps.Clone(sc)})
+		b.err = b.e.stores[d.Name()].Add(&store{domain: d, Original: maps.Clone(sc)})
 	}
 	return b
 }
@@ -145,24 +146,41 @@ func (b *Builder) config(source string, c *config.Config) {
 	}
 	b.StoreConfigs(c.Stores...)
 	for _, r := range c.Rules {
+		b.rule(r)
 		if b.err != nil {
 			return
 		}
-		start := b.classes(&r.Start)
-		if b.err != nil {
-			return
-		}
-		goal := b.classes(&r.Goal)
-		if b.err != nil {
-			return
-		}
-		var tmpl *template.Template
-		tmpl, b.err = b.e.NewTemplate(r.Name).Parse(r.Result.Query)
-		if b.err != nil {
-			return
-		}
-		b.Rules(rules.NewTemplateRule(start, goal, tmpl))
 	}
+}
+
+func (b *Builder) rule(r config.Rule) {
+	if b.err != nil {
+		return
+	}
+	defer func() {
+		var e korrel8r.ClassNotFoundError
+		if errors.As(b.err, &e) {
+			// Skip rules with invalid classes but don't fail the configuration.
+			// Different clusters may have different resource sets, use the rules that are valid.
+			// TODO: Need to distinguish class-not-found from cluster-connection-broken.
+			log.Error(b.err, "Skipping rule", "rule", r.Name)
+			b.err = nil
+		}
+	}()
+	start := b.classes(&r.Start)
+	if b.err != nil {
+		return
+	}
+	goal := b.classes(&r.Goal)
+	if b.err != nil {
+		return
+	}
+	var tmpl *template.Template
+	tmpl, b.err = b.e.NewTemplate(r.Name).Parse(r.Result.Query)
+	if b.err != nil {
+		return
+	}
+	b.Rules(rules.NewTemplateRule(start, goal, tmpl))
 }
 
 func (b *Builder) classes(spec *config.ClassSpec) []korrel8r.Class {
@@ -172,6 +190,11 @@ func (b *Builder) classes(spec *config.ClassSpec) []korrel8r.Class {
 	}
 	list := unique.NewList[korrel8r.Class]()
 	if len(spec.Classes) == 0 {
+		all := d.Classes()
+		if len(all) == 0 {
+			b.err = fmt.Errorf("No classes found: %w", korrel8r.ClassNotFoundError{Domain: d})
+			return nil
+		}
 		list.Append(d.Classes()...) // Missing class list means all classes in domain.
 	} else {
 		for _, class := range spec.Classes {
@@ -182,9 +205,6 @@ func (b *Builder) classes(spec *config.ClassSpec) []korrel8r.Class {
 			}
 			list.Append(c)
 		}
-	}
-	if len(list.List) == 0 {
-		b.err = fmt.Errorf("invalid class specification: %#+v", *spec)
 	}
 	return list.List
 }

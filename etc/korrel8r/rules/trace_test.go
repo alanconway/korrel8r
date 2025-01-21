@@ -8,8 +8,6 @@ import (
 	"github.com/korrel8r/korrel8r/pkg/domains/k8s"
 	"github.com/korrel8r/korrel8r/pkg/domains/trace"
 	"github.com/stretchr/testify/assert"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func Test_TraceToPod(t *testing.T) {
@@ -46,17 +44,17 @@ func Test_TraceFromPod(t *testing.T) {
 	}{
 		{
 			rule:  "PodToTrace",
-			start: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "bar"}},
+			start: k8s.Object{"kind": "Pod", "metadata": k8s.Object{"name": "foo", "namespace": "bar"}},
 			want:  `trace:span:{resource.k8s.namespace.name="bar"&&resource.k8s.pod.name="foo"}`,
 		},
 		{
 			rule:  "PodToTrace",
-			start: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Namespace: "bar"}},
+			start: k8s.Object{"kind": "Pod", "metadata": k8s.Object{"namespace": "bar"}},
 			want:  `trace:span:{resource.k8s.namespace.name="bar"}`,
 		},
 		{
 			rule:  "PodToTrace",
-			start: &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "foo"}},
+			start: k8s.Object{"kind": "Pod", "metadata": k8s.Object{"name": "foo"}},
 			want:  `trace:span:{resource.k8s.pod.name="foo"}`,
 		},
 	} {
