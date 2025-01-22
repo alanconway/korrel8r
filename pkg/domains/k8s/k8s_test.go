@@ -26,15 +26,15 @@ import (
 
 var (
 	d          = NewDomainWith(&rest.Config{}, fake.NewClientBuilder().WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).Build())
-	namespace  = &class{d: d, gvk: schema.GroupVersionKind{Kind: "Namespace", Version: "v1"}}
-	pod        = &class{d: d, gvk: schema.GroupVersionKind{Kind: "Pod", Version: "v1"}}
-	deployment = &class{d: d, gvk: schema.GroupVersionKind{Kind: "Deployment", Version: "v1", Group: "apps"}}
+	namespace  = d.Class("Namespace").(Class)
+	pod        = d.Class("Pod").(Class)
+	deployment = d.Class("Deployment.apps").(Class)
 )
 
 func TestDomain_Class_builtin(t *testing.T) {
 	for _, x := range []struct {
 		name string
-		want Class
+		want korrel8r.Class
 	}{
 		{"Namespace.v1.", namespace},       // Kind, version and group
 		{"Namespace.", namespace},          // Kind and version
@@ -156,8 +156,8 @@ func TestStore_Get(t *testing.T) {
 			for _, v := range result {
 				o := v.(Object)
 				got = append(got, types.NamespacedName{
-					Namespace: UnstructuredOf(o).GetNamespace(),
-					Name:      UnstructuredOf(o).GetName(),
+					Namespace: Unstructured(o).GetNamespace(),
+					Name:      Unstructured(o).GetName(),
 				})
 			}
 			assert.ElementsMatch(t, x.want, got)
@@ -198,7 +198,7 @@ func TestStore_Get_Constraint(t *testing.T) {
 			require.NoError(t, err)
 			var got []string
 			for _, v := range result {
-				got = append(got, UnstructuredOf(v.(Object)).GetName())
+				got = append(got, Unstructured(v.(Object)).GetName())
 			}
 			assert.ElementsMatch(t, x.want, got, "%v != %v", x.want, got)
 		})

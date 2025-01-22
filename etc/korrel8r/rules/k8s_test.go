@@ -10,6 +10,7 @@ import (
 	"github.com/korrel8r/korrel8r/pkg/domains/log"
 	"github.com/korrel8r/korrel8r/pkg/domains/metric"
 	"github.com/korrel8r/korrel8r/pkg/korrel8r"
+	"github.com/stretchr/testify/assert"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,6 +20,7 @@ import (
 func TestLogToPod(t *testing.T) {
 	e := setupT(t)
 	kd := e.Domain("k8s")
+	r := e.Rule("LogToPod")
 	for _, o := range []log.Object{
 		log.NewObject(`{"kubernetes":{"namespace_name":"foo","pod_name":"bar"}, "message":"hello"}`),
 		log.NewObject(`{"kubernetes":{"namespace_name":"default","pod_name":"baz"}, "message":"bye"}`),
@@ -27,13 +29,12 @@ func TestLogToPod(t *testing.T) {
 			k := o["kubernetes"].(map[string]any)
 			namespace := k["namespace_name"].(string)
 			name := k["pod_name"].(string)
-			start := log.Application
-			if log.Preview(o) == "default" {
-				start = log.Infrastructure
-			}
 			pod := kd.Class("Pod")
 			want := k8s.NewQuery(pod.(k8s.Class), namespace, name, nil, nil)
-			testTraverse(t, e, start, kd.Class("Pod"), []korrel8r.Object{o}, want)
+			q, err := r.Apply(o)
+			if assert.NoError(t, err) {
+				assert.Equal(t, want, q)
+			}
 		})
 	}
 }
@@ -65,7 +66,7 @@ func TestSelectorToPods(t *testing.T) {
 		}}
 	kd := e.Domain("k8s")
 	class := kd.Class("Pod")
-	testTraverse(t, e, kd.Class("Deployment.apps"), class, []korrel8r.Object{d},
+	testTraverse(t, e, kd.Class("Deployment.apps"), class, []korrel8r.Object{k8s.ObjectOf(d)},
 		k8s.NewQuery(class.(k8s.Class), "ns", "", client.MatchingLabels{"test": "testme"}, nil))
 }
 
@@ -91,7 +92,7 @@ func TestK8sEvent(t *testing.T) {
 
 func TestK8sAllToMetric(t *testing.T) {
 	e := setupT(t)
-	kd := e.Domain("k8s").(*k8s.Domain)
+	kd := e.Domain("k8s")
 	pod := k8s.New[corev1.Pod]("aNamespace", "foo")
 	want := metric.Query("{namespace=\"aNamespace\",pod=\"foo\"}")
 	testTraverse(t, e, kd.Class("Pod"), want.Class(), []korrel8r.Object{pod}, want)
@@ -99,7 +100,7 @@ func TestK8sAllToMetric(t *testing.T) {
 
 func TestK8sPOdToAlert(t *testing.T) {
 	e := setupT(t)
-	kd := e.Domain("k8s").(*k8s.Domain)
+	kd := e.Domain("k8s")
 	pod := k8s.New[corev1.Pod]("aNamespace", "foo")
 	want := alert.Query{"namespace": "aNamespace", "pod": "foo"}
 	testTraverse(t, e, kd.Class("Pod"), want.Class(), []korrel8r.Object{pod}, want)

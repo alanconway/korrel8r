@@ -18,7 +18,6 @@ aliases:
     domain: k8s
     classes:
       - Service
-      - Ingress.networking.k8s.io
       - NetworkPolicy.networking.k8s.io
 
   - name: storage
