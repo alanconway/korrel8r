@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	d = k8s.NewDomainWith(&rest.Config{},
-		fake.NewClientBuilder().WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).Build())
+	d = k8s.NewTestDomain(&rest.Config{},
+		fake.NewClientBuilder().WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).Build(), nil)
 	fixture = domain.Fixture{Query: k8s.NewQuery(d.Class("Pod").(k8s.Class), "", "", nil, nil)}
 )
 

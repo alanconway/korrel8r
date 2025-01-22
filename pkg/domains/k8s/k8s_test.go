@@ -24,8 +24,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
+func fakeClientRM(rm meta.RESTMapper) client.Client {
+	return fake.NewClientBuilder().WithRESTMapper(rm).Build()
+}
+func fakeClient() client.Client {
+	return fakeClientRM(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme))
+}
+
 var (
-	d          = NewDomainWith(&rest.Config{}, fake.NewClientBuilder().WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).Build())
+	d          = NewTestDomain(&rest.Config{}, fakeClient(), nil)
 	namespace  = d.Class("Namespace").(Class)
 	pod        = d.Class("Pod").(Class)
 	deployment = d.Class("Deployment.apps").(Class)
@@ -62,18 +69,18 @@ func TestDomain_Class_restmapper(t *testing.T) {
 	rm := meta.NewDefaultRESTMapper([]schema.GroupVersion{schema.GroupVersion{Group: "fake", Version: "v1"}})
 	dummy := schema.GroupVersionKind{Group: "fake", Version: "v1", Kind: "Dummy"}
 	rm.Add(dummy, meta.RESTScopeNamespace)
-	d := NewDomainWith(&rest.Config{}, fake.NewClientBuilder().WithRESTMapper(rm).Build())
+	d := NewTestDomain(&rest.Config{}, fakeClientRM(rm), nil)
 
 	for _, x := range []struct {
 		name string
-		want korrel8r.Class
+		want schema.GroupVersionKind
 	}{
-		{"Dummy.v1.fake", d.ClassOf(dummy)},
-		{"Dummy.fake", d.ClassOf(dummy)},
+		{"Dummy.v1.fake", dummy},
+		{"Dummy.fake", dummy},
 	} {
 		t.Run(x.name, func(t *testing.T) {
 			got := d.Class(x.name)
-			assert.Equal(t, x.want, got)
+			assert.Equal(t, x.want, got.(Class).GVK())
 			// Round trip
 			got2 := d.Class(got.Name())
 			assert.Equal(t, got, got2)
@@ -132,7 +139,7 @@ func TestStore_Get(t *testing.T) {
 				ObjectMeta: metav1.ObjectMeta{Name: "wilma", Namespace: "y", Labels: map[string]string{"app": "foo"}},
 			},
 		).Build()
-	d := NewDomainWith(&rest.Config{}, c)
+	d := NewTestDomain(&rest.Config{}, c, nil)
 	store, err := d.Store(nil)
 	require.NoError(t, err)
 	var (
@@ -179,7 +186,7 @@ func TestStore_Get_Constraint(t *testing.T) {
 	c := fake.NewClientBuilder().
 		WithRESTMapper(testrestmapper.TestOnlyStaticRESTMapper(scheme.Scheme)).
 		WithObjects(early, ontime, late).Build()
-	d := NewDomainWith(&rest.Config{}, c)
+	d := NewTestDomain(&rest.Config{}, c, nil)
 	store, err := d.Store(nil)
 	require.NoError(t, err)
 

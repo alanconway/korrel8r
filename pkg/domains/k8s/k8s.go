@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -40,15 +41,26 @@ func NewDomain() (korrel8r.Domain, error) {
 	if err != nil {
 		return nil, err
 	}
+	return NewDomainWithConfig(cfg)
+}
+
+// NewDomainWithConfig creates a Kubernetes domain using the given REST configuration.
+func NewDomainWithConfig(cfg *rest.Config) (korrel8r.Domain, error) {
 	c, err := NewClient(cfg)
 	if err != nil {
 		return nil, err
 	}
-	return NewDomainWith(cfg, c), nil
+	discover, err := discovery.NewDiscoveryClientForConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &domain{cfg: cfg, c: c, discover: discover}, nil
 }
 
-// NewDomainWith returns a Kubernetes domain using the given configuration and client.
-func NewDomainWith(cfg *rest.Config, c client.Client) *domain { return &domain{cfg: cfg, c: c} }
+// NewTestDomain returns a Kubernetes domain for tests, can use fake client and discovery.
+func NewTestDomain(cfg *rest.Config, c client.Client, d discovery.DiscoveryInterface) *domain {
+	return &domain{cfg: cfg, c: c, discover: d}
+}
 
 // Class represents a kind of kubernetes resource.
 //
@@ -121,8 +133,9 @@ var (
 
 // FIXME documentdomain implementation
 type domain struct {
-	c   client.Client
-	cfg *rest.Config
+	c        client.Client
+	cfg      *rest.Config
+	discover discovery.DiscoveryInterface
 }
 
 func (d *domain) Name() string        { return "k8s" }
