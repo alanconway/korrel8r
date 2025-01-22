@@ -19,5 +19,5 @@ func TestConsolePluginToService(t *testing.T) {
 	}
 	got, err := apply(e, "ConsolePluginToService", cp)
 	assert.NoError(t, err)
-	assert.Equal(t, "k8s:Service.v1.:{\"namespace\":\"backendNamespace\",\"name\":\"backendName\"}", got.String())
+	assert.Equal(t, "k8s:Service/v1:{\"namespace\":\"backendNamespace\",\"name\":\"backendName\"}", got.String())
 }

@@ -42,7 +42,7 @@ rules:
       classes: [ netflowResource ]
     result:
       query: |-
-        {{if .SrcK8S_Type}}k8s:{{.SrcK8S_Type}}:{namespace: "{{.SrcK8S_Namespace}}", name: "{{.SrcK8S_Name}}"}{{end}}
+        {{if .SrcK8S_Type}}{{k8sClassForKind .SrcK8S_Type}}:{namespace: "{{.SrcK8S_Namespace}}", name: "{{.SrcK8S_Name}}"}{{end}}
 
   - name: NetflowToSrcK8sOwner
     start:
@@ -52,7 +52,7 @@ rules:
       classes: [ netflowOwner ]
     result:
       query: |-
-        {{if .SrcK8S_OwnerType}}k8s:{{.SrcK8S_OwnerType}}:{namespace: "{{.SrcK8S_Namespace}}", name: "{{.SrcK8S_OwnerName}}"}{{end}}
+        {{if .SrcK8S_OwnerType}}{{k8sClassForKind .SrcK8S_OwnerType}}:{namespace: "{{.SrcK8S_Namespace}}", name: "{{.SrcK8S_OwnerName}}"}{{end}}
 
   - name: NetflowToDstK8s
     start:
@@ -62,7 +62,7 @@ rules:
       classes: [ netflowResource ]
     result:
       query: |-
-        {{if .DstK8S_Type}}k8s:{{.DstK8S_Type}}:{namespace: "{{.DstK8S_Namespace}}", name: "{{.DstK8S_Name}}"}{{end}}
+        {{if .DstK8S_Type}}{{k8sClassForKind .DstK8S_Type}}:{namespace: "{{.DstK8S_Namespace}}", name: "{{.DstK8S_Name}}"}{{end}}
 
   - name: NetflowToDstK8sOwner
     start:
@@ -72,7 +72,7 @@ rules:
       classes: [ netflowOwner ]
     result:
       query: |-
-        {{if .DstK8S_OwnerType}}k8s:{{.DstK8S_OwnerType}}:{namespace: "{{.DstK8S_Namespace}}", name: "{{.DstK8S_OwnerName}}"}{{end}}
+        {{if .DstK8S_OwnerType}}{{k8sClassForKind .DstK8S_OwnerType}}:{namespace: "{{.DstK8S_Namespace}}", name: "{{.DstK8S_OwnerName}}"}{{end}}
 
   # K8s resources to related netflows.
 

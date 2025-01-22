@@ -5,6 +5,7 @@ package k8s
 import (
 	"testing"
 
+	"github.com/korrel8r/korrel8r/pkg/korrel8r"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
 )
@@ -25,4 +26,19 @@ func TestKindToResource(t *testing.T) {
 	}
 	_, err := kindToResource(rm, "x", "y")
 	assert.EqualError(t, err, "no matches for kind \"x\" in version \"y\"")
+}
+
+func TestK8sClassForKind(t *testing.T) {
+	for _, x := range []struct {
+		kind string
+		want korrel8r.Class
+	}{
+		{"Pod", Domain.Class("Pod/v1")},
+		{"Deployment", Domain.Class("Deployment.apps/v1")},
+		{"Event", Domain.Class("Event/v1")},
+	} {
+		t.Run(x.kind, func(t *testing.T) {
+			assert.Equal(t, x.want, k8sClassForKind(x.kind))
+		})
+	}
 }

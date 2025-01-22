@@ -2,10 +2,10 @@ rules:
    - name: ConsolePluginToService
      start:
        domain: k8s
-       classes: [ConsolePlugin.v1.console.openshift.io]
+       classes: [ConsolePlugin.console.openshift.io]
      goal:
        domain: k8s
-       classes: [Service.v1.]
+       classes: [Service.]
      result:
        query: |-
-         k8s:Service.v1.:{"name":"{{.Spec.Backend.Service.Name}}", "namespace":"{{.Spec.Backend.Service.Namespace}}"}
+         k8s:Service.:{"name":"{{.Spec.Backend.Service.Name}}", "namespace":"{{.Spec.Backend.Service.Namespace}}"}

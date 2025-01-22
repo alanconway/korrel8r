@@ -16,6 +16,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/meta/testrestmapper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -27,21 +28,18 @@ func TestDomain_Class(t *testing.T) {
 	require.NoError(t, appsv1.AddToScheme(scheme.Scheme))
 	for _, x := range []struct {
 		name string
-		want korrel8r.Class
+		want Class
 	}{
-		{"Namespace", ClassOf(&corev1.Namespace{})},           // Kind only
-		{"Namespace.", ClassOf(&corev1.Namespace{})},          // Kind and version
-		{"Namespace.v1.", ClassOf(&corev1.Namespace{})},       // Kind, version and group
-		{"Pod", ClassOf(&corev1.Pod{})},                       // Kind only
-		{"Pod.", ClassOf(&corev1.Pod{})},                      // Kind and group (core group is named "")
-		{"Pod.v1", ClassOf(&corev1.Pod{})},                    // Kind, version, implied core group.
-		{"Pod.v1.", ClassOf(&corev1.Pod{})},                   // Kind, version, ""
-		{"Deployment", ClassOf(&appsv1.Deployment{})},         // Kind only
-		{"Deployment.apps", ClassOf(&appsv1.Deployment{})},    // Kind and group
-		{"Deployment.v1.apps", ClassOf(&appsv1.Deployment{})}, // Kind, version and group
+		{"Namespace", Class(schema.GroupVersionKind{Version: "v1", Kind: "Namespace"})},
+		{"Namespace/v1", Class(schema.GroupVersionKind{Version: "v1", Kind: "Namespace"})},
+		{"Pod", Class(schema.GroupVersionKind{Version: "v1", Kind: "Pod"})},
+		{"Pod/v1", Class(schema.GroupVersionKind{Version: "v1", Kind: "Pod"})},
+		{"Deployment.apps", Class(schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"})},
+		{"Deployment.apps/v1", Class(schema.GroupVersionKind{Group: "apps", Version: "v1", Kind: "Deployment"})},
+		{"Route.route.openshift.io/v1", Class(schema.GroupVersionKind{Group: "route.openshift.io", Version: "v1", Kind: "Route"})},
+		{"Route.route.openshift.io", Class(schema.GroupVersionKind{Group: "route.openshift.io", Version: "v1", Kind: "Route"})},
 	} {
 		t.Run(x.name, func(t *testing.T) {
-			assert.NotNil(t, x.want)
 			got := Domain.Class(x.name)
 			require.NotNil(t, got)
 			assert.Equal(t, x.want.Name(), got.Name())
@@ -62,6 +60,7 @@ func TestDomain_Query(t *testing.T) {
 	}{
 		{`k8s:Namespace:{"name":"foo"}`, NewQuery(ClassOf(&corev1.Namespace{}), "", "foo", nil, nil)},
 		{`k8s:Namespace:{name: foo}`, NewQuery(ClassOf(&corev1.Namespace{}), "", "foo", nil, nil)},
+		{`k8s:Route.route.openshift.io/v1:{namespace: foo}`, NewQuery(Class(schema.GroupVersionKind{Group: "route.openshift.io", Version: "v1", Kind: "Route"}), "foo", "", nil, nil)},
 		{`k8s:Pod:{namespace: foo, name: bar}`, NewQuery(ClassOf(&corev1.Pod{}), "foo", "bar", nil, nil)},
 		{`k8s:Pod:{namespace: foo, name: bar, labels: { a: b }, fields: { c: d }}`,
 			NewQuery(ClassOf(&corev1.Pod{}), "foo", "bar", map[string]string{"a": "b"}, map[string]string{"c": "d"})},

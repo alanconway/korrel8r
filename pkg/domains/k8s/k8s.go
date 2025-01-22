@@ -38,10 +38,11 @@ var Domain = domain{}
 
 // Class represents a kind of kubernetes resource.
 //
-// The format of a class name is: "k8s:KIND.VERSION.GROUP".
-// VERSION and GROUP are optional if there is no ambiguity.
+// Class names are of the form "k8s:KIND[.GROUP][/VERSION]".
+// GROUP is omitted for core resources.
+// VERSION may be omitted, "v1" is assumed if it is.
 //
-// Examples: `k8s:Pod.v1`, `ks8:Pod`, `k8s:Deployment.v1.apps`, `k8s:Deployment.apps`, `k8s:Deployment`
+// Examples: `k8s:Pod`, `ks8:Pod/v1`, `k8s:Deployment.apps`, `k8s:Deployment.apps/v1`, `k8s:Route.route.openshift.io/v1`
 type Class schema.GroupVersionKind
 
 // Object is a struct type representing a Kubernetes resource.
@@ -56,7 +57,7 @@ type Object client.Object
 //
 // Example:
 //
-//	k8s:Pod.v1.:{"namespace":"openshift-cluster-version","name":"cluster-version-operator-8d86bcb65-btlgn"}
+//	k8s:Pod:{"namespace":"openshift-cluster-version","name":"cluster-version-operator-8d86bcb65-btlgn"}
 type Query struct {
 	// Namespace restricts the search to a namespace.
 	Namespace string `json:"namespace,omitempty"`
@@ -107,38 +108,16 @@ func (d domain) Store(_ any) (s korrel8r.Store, err error) {
 	return NewStore(c, cfg)
 }
 
-func (d domain) Class(name string) korrel8r.Class {
-	var gvk schema.GroupVersionKind
-	s := ""
-	ok := false
-	if gvk.Kind, s, ok = strings.Cut(name, "."); !ok { // Just Kind
-		return classForKind(gvk.Kind)
+func (d domain) Class(name string) (c korrel8r.Class) {
+	kg, v, _ := strings.Cut(name, "/")
+	k, g, _ := strings.Cut(kg, ".")
+	if k == "" {
+		return nil
 	}
-	if gvk.Version, gvk.Group = s, ""; Scheme.Recognizes(gvk) { // Kind.Version
-		return Class(gvk)
+	if v == "" {
+		v = "v1"
 	}
-	if gvk.Version, gvk.Group, ok = strings.Cut(s, "."); ok && Scheme.Recognizes(gvk) { // s == Kind.Version.Group
-		return Class(gvk)
-	}
-	gvk.Version, gvk.Group = "", s // s == Kind.Group
-	return classForGK(gvk.GroupKind())
-}
-
-func classForGK(gk schema.GroupKind) korrel8r.Class {
-	if versions := Scheme.VersionsForGroupKind(gk); len(versions) > 0 {
-		return Class(gk.WithVersion(versions[0].Version))
-	}
-	return nil
-}
-
-func classForKind(kind string) korrel8r.Class {
-	for _, gv := range Scheme.PrioritizedVersionsAllGroups() {
-		gvk := gv.WithKind(kind)
-		if Scheme.Recognizes(gvk) {
-			return Class(gvk)
-		}
-	}
-	return nil
+	return Class(schema.GroupVersionKind{Group: g, Version: v, Kind: k})
 }
 
 func (d domain) Classes() (classes []korrel8r.Class) {
@@ -193,7 +172,20 @@ func (c Class) Unmarshal(b []byte) (korrel8r.Object, error) {
 	}
 	return nil, fmt.Errorf("unknown k8s type: %v", c)
 }
-func (c Class) Name() string                 { return fmt.Sprintf("%v.%v.%v", c.Kind, c.Version, c.Group) }
+func (c Class) Name() string {
+	w := &strings.Builder{}
+	w.WriteString(c.Kind)
+	if c.Group != "" {
+		w.WriteString(".")
+		w.WriteString(c.Group)
+	}
+	if c.Version != "" {
+		w.WriteString("/")
+		w.WriteString(c.Version)
+	}
+	return w.String()
+}
+
 func (c Class) String() string               { return impl.ClassString(c) }
 func (c Class) GVK() schema.GroupVersionKind { return schema.GroupVersionKind(c) }
 

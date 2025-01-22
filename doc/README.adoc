@@ -257,7 +257,7 @@ korrel8rcli -o json neighbours {korrel8rcli-url} --query 'k8s:Deployment:{namesp
 .Output is a JSON-encoded graph.
 [source,json]
 ----
-{"edges":[{"goal":"k8s:Pod.v1.","start":"k8s:Deployment.v1.apps"},...
+{"edges":[{"goal":"k8s:Pod","start":"k8s:Deployment.apps"},...
  "nodes":[{"class":"log:application","count":15,"queries":[...
 ----
 
@@ -378,7 +378,7 @@ Store fields can contain plain URL strings or templates that expand to URLs.
 stores:
   - domain: log
     lokiStack: <-
-      {{$r := get "k8s:Route:{namespace: openshift-logging, name: logging-loki}" -}} <1>
+      {{$r := get "k8s:Route.route.openshift.io/v1:{namespace: openshift-logging, name: logging-loki}" -}} <1>
       https://{{ (first $r).Spec.Host -}} <2>
 ----
 

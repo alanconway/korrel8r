@@ -32,7 +32,7 @@ Query struct for a Kubernetes query.
 Example:
 
 ----
-k8s:Pod.v1.:{"namespace":"openshift-cluster-version","name":"cluster-version-operator-8d86bcb65-btlgn"}
+k8s:Pod:{"namespace":"openshift-cluster-version","name":"cluster-version-operator-8d86bcb65-btlgn"}
 ----
 
 

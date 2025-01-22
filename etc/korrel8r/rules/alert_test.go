@@ -19,27 +19,27 @@ func TestAlertToRules(t *testing.T) {
 		{
 			rule:  "AlertToDeployment",
 			start: &alert.Object{Labels: map[string]string{"namespace": "foo", "deployment": "bar"}},
-			want:  `k8s:Deployment.v1.apps:{"namespace":"foo","name":"bar"}`,
+			want:  `k8s:Deployment.apps/v1:{"namespace":"foo","name":"bar"}`,
 		},
 		{
 			rule:  "AlertToPod",
 			start: &alert.Object{Labels: map[string]string{"namespace": "foo", "pod": "bar"}},
-			want:  `k8s:Pod.v1.:{"namespace":"foo","name":"bar"}`,
+			want:  `k8s:Pod/v1:{"namespace":"foo","name":"bar"}`,
 		},
 		{
 			rule:  "AlertToDaemonSet",
 			start: &alert.Object{Labels: map[string]string{"namespace": "foo", "daemonset": "bar"}},
-			want:  `k8s:DaemonSet.v1.apps:{"namespace":"foo","name":"bar"}`,
+			want:  `k8s:DaemonSet.apps/v1:{"namespace":"foo","name":"bar"}`,
 		},
 		{
 			rule:  "AlertToStatefulSet",
 			start: &alert.Object{Labels: map[string]string{"namespace": "foo", "statefulset": "bar"}},
-			want:  `k8s:StatefulSet.v1.apps:{"namespace":"foo","name":"bar"}`,
+			want:  `k8s:StatefulSet.apps/v1:{"namespace":"foo","name":"bar"}`,
 		},
 		{
 			rule:  "AlertToPodDisruptionBudget",
 			start: &alert.Object{Labels: map[string]string{"namespace": "foo", "poddisruptionbudget": "bar"}},
-			want:  `k8s:PodDisruptionBudget.v1.policy:{"namespace":"foo","name":"bar"}`,
+			want:  `k8s:PodDisruptionBudget.policy/v1:{"namespace":"foo","name":"bar"}`,
 		},
 		{
 			rule:  "AlertToMetric",
