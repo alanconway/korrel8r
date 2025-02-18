@@ -167,8 +167,8 @@ func (n *node) Run(ctx context.Context) {
 		}
 		before := len(n.Result.List())
 		err := n.engine.Get(ctx, q, korrel8r.ConstraintFrom(ctx), n.Result)
-		n.errs.Log(err, "Async: Get failed", "error", err, "query", q)
-		result := n.Result.List()[before:]
+		n.errs.Log(err, "Async: Get", "error", err, "query", q)
+		result := n.Result.List()[before:] // Use result even if there was an error.
 		for _, o := range result {
 			n.applyRules(ctx, o)
 		}
