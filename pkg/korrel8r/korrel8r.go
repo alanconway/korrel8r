@@ -84,8 +84,12 @@ type Store interface {
 	// Domain of the Store
 	Domain() Domain
 	// Get objects selected by the Query and append to the Appender.
+	//
 	// If Constraint is non-nil, only objects satisfying the constraint are returned.
-	// Note: a "not found" condition should give an empty result, it should not be reported as an error.
+	//
+	// Notes:
+	// - A "not found" condition should give an empty result, it should not be reported as an error.
+	// - Get may return a non-nil error after appending a partial result to the [Appender].
 	Get(context.Context, Query, *Constraint, Appender) error
 	// StoreClasses gets the list of classes supported by the [Store]. See [Domain.Classes]
 	StoreClasses() ([]Class, error)

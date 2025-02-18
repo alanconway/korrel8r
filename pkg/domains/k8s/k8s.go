@@ -101,15 +101,7 @@ func (d domain) Classes() []korrel8r.Class { return nil }
 
 // Store connects to the kube config default cluster. The config parameter is ignored.
 func (d domain) Store(_ any) (s korrel8r.Store, err error) {
-	cfg, err := GetConfig()
-	if err != nil {
-		return nil, err
-	}
-	c, err := NewClient(cfg)
-	if err != nil {
-		return nil, err
-	}
-	return NewStore(c, cfg)
+	return NewStore(nil, nil)
 }
 
 var (
@@ -202,7 +194,21 @@ func (q Query) Data() string          { b, _ := json.Marshal(q); return string(b
 func (q Query) String() string        { return impl.QueryString(q) }
 
 // NewStore creates a new k8s store.
+// Called with nil, nil uses default kube config values.
 func NewStore(c client.Client, cfg *rest.Config) (*Store, error) {
+	var err error
+	if cfg == nil {
+		cfg, err = GetConfig()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if c == nil {
+		c, err = NewClient(cfg)
+		if err != nil {
+			return nil, err
+		}
+	}
 	dc, err := discovery.NewDiscoveryClientForConfig(cfg)
 	if err != nil {
 		return nil, err
@@ -222,7 +228,6 @@ func NewStoreWithDiscovery(c client.Client, cfg *rest.Config, di discovery.Disco
 }
 
 func (s Store) Domain() korrel8r.Domain { return Domain }
-func (s Store) Client() client.Client   { return s.c }
 
 func (s *Store) Get(ctx context.Context, query korrel8r.Query, c *korrel8r.Constraint, result korrel8r.Appender) (err error) {
 	// Skip the call if the class is not known
@@ -279,6 +284,9 @@ func (s *Store) StoreClasses() (classes []korrel8r.Class, err error) {
 	}
 	return classes, err
 }
+
+func (s Store) Client() client.Client { return s.c }
+func (s Store) Config() *rest.Config  { return s.cfg }
 
 func (s *Store) getObject(ctx context.Context, q *Query, result korrel8r.Appender) error {
 	u := Wrap(q.class.New())
