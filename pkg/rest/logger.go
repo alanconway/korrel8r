@@ -40,9 +40,9 @@ func (a *API) logger(c *gin.Context) {
 			log = log.WithValues("response", rw.String())
 		}
 		if c.IsAborted() || c.Writer.Status()/100 != 2 {
-			log.V(2).Info("Request failed")
+			log.V(2).Info("Incoming request failed")
 		} else {
-			log.V(3).Info("Request success")
+			log.V(3).Info("Incoming request succeeded")
 		}
 	}()
 	c.Next()

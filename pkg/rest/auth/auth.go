@@ -24,6 +24,7 @@ type roundTripper struct{ next http.RoundTripper }
 func (rt *roundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx := req.Context()
 	if auth, ok := ctx.Value(authKey{}).(string); ok {
+		req = req.Clone(ctx) // RoundTrip contract - don't modify original request
 		req.Header.Set(Header, auth)
 	}
 	return rt.next.RoundTrip(req)

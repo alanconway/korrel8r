@@ -44,6 +44,9 @@ import (
 const (
 	name        = "metric"
 	description = "Time-series of measured values"
+
+	StoreKeyMetricURL   = name
+	StoreKeyMetricNSURL = name + "NS"
 )
 
 var (
@@ -64,8 +67,6 @@ func (d domain) Query(s string) (korrel8r.Query, error) {
 	return Query(qs), err
 }
 
-const StoreKeyMetricURL = name
-
 func (domain) Store(s any) (korrel8r.Store, error) {
 	cs, err := impl.TypeAssert[config.Store](s)
 	if err != nil {
@@ -75,7 +76,21 @@ func (domain) Store(s any) (korrel8r.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewStore(cs[StoreKeyMetricURL], hc)
+	u, err := url.Parse(cs[StoreKeyMetricURL])
+	if err != nil {
+		return nil, err
+	}
+	// Optional second endpoint for namespace-scoped queries.
+	uNS, err := url.Parse(cs[StoreKeyMetricNSURL])
+	if err != nil {
+		return nil, err
+	}
+	return &Store{
+		Client:           hc,
+		promURL:          u.JoinPath("/api/v1"),
+		promNamspacedURL: uNS.JoinPath("/api/v1"),
+		Store:            impl.NewStore(Domain),
+	}, nil
 }
 
 type Class struct{} // Singleton class
@@ -101,16 +116,8 @@ func Preview(o korrel8r.Object) string {
 
 type Store struct {
 	*http.Client
-	baseURL *url.URL
+	promURL, promNamspacedURL *url.URL
 	*impl.Store
-}
-
-func NewStore(baseURL string, hc *http.Client) (korrel8r.Store, error) {
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return nil, err
-	}
-	return &Store{Client: hc, baseURL: u.JoinPath("/api/v1"), Store: impl.NewStore(Domain)}, nil
 }
 
 func (s *Store) Domain() korrel8r.Domain { return Domain }
@@ -146,7 +153,17 @@ func (s *Store) Get(ctx context.Context, kquery korrel8r.Query, c *korrel8r.Cons
 			q.Set("limit", strconv.Itoa(*c.Limit))
 		}
 	}
-	u := s.baseURL.JoinPath("series")
+	u := s.promURL
+
+	// Check for special treatment of single-namespace queries.
+	if s.promNamspacedURL.Host != "" {
+		if ns := singleNamespace(selectors); ns != "" {
+			q.Set("namespace", ns)
+			u = s.promNamspacedURL
+		}
+	}
+
+	u = u.JoinPath("series")
 	u.RawQuery = q.Encode()
 	var r response
 	if err := impl.Get(ctx, u, s.Client, c.GetTimeout(), &r); err != nil {

@@ -4,6 +4,7 @@ package metric
 
 import (
 	"github.com/korrel8r/korrel8r/pkg/korrel8r"
+	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 )
 
@@ -33,4 +34,27 @@ func (q Query) Selectors() ([]string, error) {
 		return nil
 	})
 	return selectors, err
+}
+
+// Check if selectors represent a query for exactly one namespace.
+// Return the namespace if that is the case.
+func singleNamespace(selectors []string) (namespace string) {
+	for _, s := range selectors {
+		matchers, err := parser.ParseMetricSelector(s)
+		if err != nil {
+			return ""
+		}
+		for _, m := range matchers {
+			if m.Name == "namespace" {
+				if m.Type != labels.MatchEqual {
+					return "" // != or =~ can match multiple namespaces
+				}
+				if namespace != "" && m.Value != namespace {
+					return "" // More than one namespace mentioned
+				}
+				namespace = m.Value
+			}
+		}
+	}
+	return namespace
 }
