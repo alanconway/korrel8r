@@ -54,6 +54,29 @@ func TestTemplateRule_Apply_Blank(t *testing.T) {
 	assert.Empty(t, queries)
 }
 
+func TestTemplateRule_Apply_Empty(t *testing.T) {
+	d := mock.NewDomain("test", "a", "b")
+	a, b := d.Class("a"), d.Class("b")
+	tmpl := template.Must(template.New("empty").Parse("test:b:"))
+	rule := NewTemplateRule([]korrel8r.Class{a}, []korrel8r.Class{b}, tmpl, testDomains(d))
+
+	queries, err := rule.Apply("x")
+	require.NoError(t, err)
+	assert.Empty(t, queries, "empty query should be skipped")
+}
+
+func TestTemplateRule_Apply_EmptyMixed(t *testing.T) {
+	d := mock.NewDomain("test", "a", "b")
+	a, b := d.Class("a"), d.Class("b")
+	tmpl := template.Must(template.New("mixed").Parse("test:b:\ntest:b:real"))
+	rule := NewTemplateRule([]korrel8r.Class{a}, []korrel8r.Class{b}, tmpl, testDomains(d))
+
+	queries, err := rule.Apply("x")
+	require.NoError(t, err)
+	require.Len(t, queries, 1, "empty query should be skipped, non-empty kept")
+	assert.Equal(t, "test:b:real", queries[0].String())
+}
+
 func TestTemplateRule_Accessors(t *testing.T) {
 	d := mock.NewDomain("test", "a", "b")
 	a, b := d.Class("a"), d.Class("b")

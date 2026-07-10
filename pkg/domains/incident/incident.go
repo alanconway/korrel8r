@@ -102,6 +102,7 @@ type Query struct {
 func (q *Query) Class() korrel8r.Class { return Class{} }
 func (q *Query) Data() string          { b, _ := json.Marshal(q); return string(b) }
 func (q *Query) String() string        { return korrel8r.QueryString(q) }
+func (q *Query) Empty() bool            { return q.Id == "" && len(q.AlertLabels) == 0 }
 
 // Store is a client of Prometheus.
 type Store struct {

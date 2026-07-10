@@ -4,6 +4,7 @@ package metric
 
 import (
 	"github.com/korrel8r/korrel8r/pkg/korrel8r"
+	"github.com/korrel8r/korrel8r/pkg/korrel8r/impl"
 	"github.com/prometheus/prometheus/promql/parser"
 )
 
@@ -19,6 +20,7 @@ type Query string
 func (q Query) Class() korrel8r.Class { return Class{} }
 func (q Query) Data() string          { return string(q) }
 func (q Query) String() string        { return korrel8r.QueryString(q) }
+func (q Query) Empty() bool            { return impl.EmptySelector(string(q)) }
 
 func (q Query) Selectors() ([]string, error) {
 	var selectors []string

@@ -140,6 +140,7 @@ type Query struct {
 
 func (q *Query) Class() korrel8r.Class { return q.class }
 func (q *Query) String() string        { return korrel8r.QueryString(q) }
+func (q *Query) Empty() bool           { return impl.EmptySelector(q.logQL) && q.direct == nil }
 func (q *Query) Data() string {
 	if q.direct != nil {
 		d, _ := json.Marshal(q.direct)

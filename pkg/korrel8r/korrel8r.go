@@ -93,6 +93,8 @@ type Query interface {
 	Data() string
 	// String fully qualified DOMAIN:CLASS:DATA query string.
 	String() string
+	// Empty means the query has an empty selector and selects everything of its class.
+	Empty() bool
 }
 
 // Object represents an instance of a signal.

@@ -284,6 +284,10 @@ func (q *Query) Class() korrel8r.Class { return q.class }
 func (q *Query) Data() string          { b, _ := json.Marshal(q); return string(b) }
 func (q *Query) String() string        { return korrel8r.QueryString(q) }
 
+func (q *Query) Empty() bool {
+	return q.Namespace == "" && q.Name == "" && len(q.Labels) == 0 && len(q.Fields) == 0
+}
+
 func (s *Store) Domain() korrel8r.Domain  { return Domain }
 func (s *Store) Client() client.WithWatch { return s.c }
 func (s *Store) Config() *rest.Config     { return s.cfg }

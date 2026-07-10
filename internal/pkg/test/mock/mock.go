@@ -144,6 +144,7 @@ func NewQueryError(c korrel8r.Class, selector string, err error) korrel8r.Query 
 func (q *Query) Class() korrel8r.Class { return q.class }
 func (q *Query) Data() string          { return q.data }
 func (q *Query) String() string        { return korrel8r.QueryString(q) }
+func (q *Query) Empty() bool            { return q.data == "" }
 
 // Timestamper interface for objects with a Timestamp() method.
 type Timestamper interface{ Timestamp() time.Time }

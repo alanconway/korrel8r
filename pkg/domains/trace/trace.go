@@ -138,6 +138,7 @@ func NewQuery(traceQL string) korrel8r.Query { return Query(strings.TrimSpace(tr
 func (q Query) Class() korrel8r.Class { return Class{} }
 func (q Query) Data() string          { return string(q) }
 func (q Query) String() string        { return korrel8r.QueryString(q) }
+func (q Query) Empty() bool            { return impl.EmptySelector(string(q)) }
 
 // NewTempoStackStore returns a store that uses a TempoStack observatorium-style URLs.
 func NewTempoStackStore(base *url.URL, h *http.Client) (korrel8r.Store, error) {

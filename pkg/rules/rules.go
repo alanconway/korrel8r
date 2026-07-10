@@ -56,6 +56,12 @@ func (r *templateRule) Apply(start korrel8r.Object) ([]korrel8r.Query, error) {
 		if err != nil {
 			return nil, err
 		}
+		if query.Empty() {
+			// Empty queries are not a valid result for a rule because selecting everything provides
+			// no more information than selecting nothing - the results are not related to the start point.
+			// Rule templates can produce empty queries by accident when applied to unexpected data.
+			continue
+		}
 		queries = append(queries, query)
 	}
 	return queries, nil

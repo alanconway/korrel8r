@@ -152,6 +152,7 @@ type Query struct {
 func (q *Query) Class() korrel8r.Class { return Class{} }
 func (q *Query) Data() string          { return q.Qs }
 func (q *Query) String() string        { return korrel8r.QueryString(q) }
+func (q *Query) Empty() bool            { return q.Qs == "" && len(q.Parsed) == 0 }
 
 // Store is a client of Prometheus, AlertManager, and Loki Ruler.
 type Store struct {

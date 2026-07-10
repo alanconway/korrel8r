@@ -4,6 +4,7 @@ package impl
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/korrel8r/korrel8r/pkg/korrel8r"
 )
@@ -23,6 +24,11 @@ func ParseQuery(domain korrel8r.Domain, query string) (class korrel8r.Class, sel
 	}
 	return class, q, nil
 }
+
+var emptySelector = regexp.MustCompile(`^\s*(\{\s*\})?\s*$`)
+
+// EmptySelector returns true if selector is empty or contains only whitespace and braces.
+func EmptySelector(selector string) bool { return emptySelector.MatchString(selector) }
 
 // UnmarshalQueryString unmarshals JSON query string to Go values.
 // T is the type to use to unmarshal the query data part.
