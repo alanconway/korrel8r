@@ -53,10 +53,12 @@ type ObjectsResult struct {
 	Objects []any `json:"objects" jsonschema:"List of objects matching the query"`
 }
 
-const Instructions = `Korrel8r finds rule-based relationships between Kubernetes resources and
+const baseInstructions = `Korrel8r finds rule-based relationships between Kubernetes resources and
 observability signals; relationships are not proof of cause. Explore broadly with
 'create_neighbors_graph', or use 'create_goals_graph' when you know what kind of data
-you want. Inspect the graph before fetching full data with 'get_objects'. Use
+you want. Inspect the graph before fetching full data with 'get_objects'.`
+
+const Instructions = baseInstructions + ` Use
 'get_console' and 'show_in_console' when working with the user's OpenShift console;
 see their descriptions for prerequisites.
 `
@@ -75,20 +77,38 @@ const (
 
 type Server struct {
 	*mcp.Server
-	log logr.Logger
+	log     logr.Logger
+	console bool
+}
+
+// Option configures the MCP server before tool registration.
+type Option func(*Server)
+
+// EnableConsole controls whether the MCP server exposes console tools.
+// By default, console tools are enabled.
+func EnableConsole(enabled bool) Option {
+	return func(s *Server) { s.console = enabled }
 }
 
 // NewServer creates a new MCP server that proxies to a korrel8r REST API via the given client.
-func NewServer(client *Client, version string, log logr.Logger) *Server {
-	s := &Server{
-		Server: mcp.NewServer(
-			&mcp.Implementation{Name: "korrel8r", Title: "Korrel8r MCP Server", Version: version},
-			&mcp.ServerOptions{
-				Instructions: Instructions,
-			}),
-		log: log,
+// Console tools are enabled unless disabled with [EnableConsole](false).
+func NewServer(client *Client, version string, log logr.Logger, options ...Option) *Server {
+	s := &Server{log: log, console: true}
+	for _, option := range options {
+		option(s)
 	}
+	instructions := baseInstructions
+	if s.console {
+		instructions = Instructions
+	}
+	s.Server = mcp.NewServer(
+		&mcp.Implementation{Name: "korrel8r", Title: "Korrel8r MCP Server", Version: version},
+		&mcp.ServerOptions{Instructions: instructions},
+	)
 	for _, name := range ToolNames {
+		if !s.console && (name == GetConsole || name == ShowInConsole) {
+			continue
+		}
 		binding, _ := BindTool(client, name)
 		s.AddTool(binding.Tool, binding.Handler)
 	}

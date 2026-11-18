@@ -20,7 +20,8 @@ korrel8r mcp [flags]
 ### Options
 
 ```
-  -h, --help   help for mcp
+  -h, --help                 help for mcp
+      --mcp-console string   MCP console tools: auto (OpenShift discovery), on, or off (default "auto")
 ```
 
 ### Options inherited from parent commands

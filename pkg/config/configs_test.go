@@ -3,6 +3,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -46,6 +48,21 @@ func TestLoad(t *testing.T) {
 func TestLoad_bad_tuning(t *testing.T) {
 	_, err := Load("testdata/bad-tuning.json")
 	require.EqualError(t, err, "unexpected tuning section in included configuration: testdata/config.json")
+}
+
+func TestLoadMCP(t *testing.T) {
+	dir := t.TempDir()
+	top := filepath.Join(dir, "top.yaml")
+	included := filepath.Join(dir, "included.yaml")
+	require.NoError(t, os.WriteFile(top, []byte("mcp:\n  console: off\ninclude:\n  - included.yaml\n"), 0600))
+	require.NoError(t, os.WriteFile(included, []byte("{}\n"), 0600))
+	configs, err := Load(top)
+	require.NoError(t, err)
+	require.Equal(t, "false", configs[0].MCP.Console) // YAML 1.1 treats unquoted off as false.
+
+	require.NoError(t, os.WriteFile(included, []byte("mcp:\n  console: on\n"), 0600))
+	_, err = Load(top)
+	require.ErrorContains(t, err, "unexpected mcp section in included configuration")
 }
 
 func TestConfigs_Expand(t *testing.T) {

@@ -19,6 +19,7 @@ korrel8r web [flags]
       --https string                host:port address for secure https listener
       --key string                  Private key (PEM format) for https
       --mcp                         Enable MCP streamable HTTP protocol on /mcp (default true)
+      --mcp-console string          MCP console tools: auto (OpenShift discovery), on, or off (default "auto")
       --rest                        Enable HTTP REST server on /api/v1alpha1 (default true)
       --spec string                 Write OpenAPI specification to a file, '-' for stdout.
       --tls-cipher-suites strings   Comma-separated list of TLS cipher suites for https (IANA or OpenSSL names)

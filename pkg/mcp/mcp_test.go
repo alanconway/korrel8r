@@ -262,6 +262,43 @@ func TestToolNames(t *testing.T) {
 	}
 }
 
+func TestServerConsoleOption(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		options []Option
+		console bool
+	}{
+		{"default", nil, true},
+		{"on", []Option{EnableConsole(true)}, true},
+		{"off", []Option{EnableConsole(false)}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := t.Context()
+			ct, st := mcp.NewInMemoryTransports()
+			_, err := NewServer(nil, "test", logr.Discard(), tc.options...).Connect(ctx, st, nil)
+			require.NoError(t, err)
+			cs, err := mcp.NewClient(&mcp.Implementation{Name: "test"}, nil).Connect(ctx, ct, nil)
+			require.NoError(t, err)
+			defer func() { _ = cs.Close() }()
+			listed, err := cs.ListTools(ctx, nil)
+			require.NoError(t, err)
+			names := make([]string, 0, len(listed.Tools))
+			for _, tool := range listed.Tools {
+				names = append(names, tool.Name)
+			}
+			if tc.console {
+				assert.Equal(t, Instructions, cs.InitializeResult().Instructions)
+				assert.ElementsMatch(t, ToolNames, names)
+			} else {
+				assert.Equal(t, baseInstructions, cs.InitializeResult().Instructions)
+				assert.NotContains(t, names, GetConsole)
+				assert.NotContains(t, names, ShowInConsole)
+				assert.Len(t, names, len(ToolNames)-2)
+			}
+		})
+	}
+}
+
 func TestServerInstructions(t *testing.T) {
 	ctx := t.Context()
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()

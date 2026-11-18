@@ -98,6 +98,9 @@ func (l *loader) load(source string) error {
 	if len(l.configs) > 0 && c.Tuning != nil {
 		return fmt.Errorf("unexpected tuning section in included configuration: %v", source)
 	}
+	if len(l.configs) > 0 && c.MCP != nil {
+		return fmt.Errorf("unexpected mcp section in included configuration: %v", source)
+	}
 	l.configs = append(l.configs, c)
 	for _, s := range c.Include {
 		ref := resolve(source, s)

@@ -28,6 +28,7 @@ For a HTTP streaming server use the 'web' command with the '--mcp' flag.
 `,
 	Run: func(cmd *cobra.Command, args []string) {
 		configs := must.Must1(config.Load(*configFlag))
+		console := must.Must1(consoleSetting(cmd, configs))
 		guard := must.Must1(newMemoryGuard(configs))
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -41,7 +42,8 @@ For a HTTP streaming server use the 'web' command with the '--mcp' flag.
 		router.Use(gin.Recovery(), session.Middleware(sessions))
 		must.Must1(rest.New(sessions, router))
 		client := mcp.NewClientForHandler(router)
-		server := mcp.NewServer(client, build.Version, logging.Log())
+		server := mcp.NewServer(client, build.Version, logging.Log(),
+			mcp.EnableConsole(console.enabled(detectOpenShift)))
 		server.AddReceivingMiddleware(mcpmetrics.Metrics)
 		log.Info("MCP server starting on stdio.")
 		must.Must(server.ServeStdio(ctx))
@@ -50,4 +52,5 @@ For a HTTP streaming server use the 'web' command with the '--mcp' flag.
 
 func init() {
 	rootCmd.AddCommand(mcpCmd)
+	addConsoleFlag(mcpCmd)
 }

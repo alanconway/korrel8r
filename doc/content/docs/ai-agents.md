@@ -86,6 +86,29 @@ The icon color indicates status: green = connected, red = connection error (deta
 
 See the [MCP reference](../reference/mcp/) for details of the available tools.
 
+The `get_console` and `show_in_console` MCP tools are enabled automatically when
+startup API discovery finds an OpenShift cluster. Override this on either `web` or
+`mcp` with `--mcp-console=on` or `--mcp-console=off`; `--mcp-console=auto`
+restores detection. Alternatively, set the top-level configuration:
+
+```yaml
+mcp:
+  console: auto # auto (default), "on", or "off"
+```
+
+Quote `on` and `off` in YAML: unquoted, they are YAML booleans rather than the
+strings shown by `--mcp-console`. `true` and `false` are accepted as synonyms
+for `on` and `off`.
+
+An explicit CLI value overrides the configuration.
+Discovery failures disable these tools in auto mode; `on` skips detection.
+Enabling them does not connect a user's console: console navigation still
+requires a connected console session. The [MCP reference](../reference/mcp/)
+describes `get_console` and `show_in_console` along with the always-available
+tools.
+
+See the [`mcp` configuration section](../reference/configuration/#mcp) for details.
+
 ### Connecting via MCP HTTP
 
 korrel8r serves Streamable HTTP at `/mcp` in web mode:

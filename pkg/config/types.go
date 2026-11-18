@@ -31,8 +31,19 @@ type Config struct {
 	// It is not allowed in included configuration files.
 	Tuning *Tuning `json:"tuning,omitempty"`
 
+	// MCP controls server-side MCP tool exposure. Only allowed in the top-level configuration.
+	MCP *MCP `json:"mcp,omitempty"`
+
 	// Soure of configuration, file or URL.
 	Source string `json:"-"`
+}
+
+// MCP configures the MCP server.
+type MCP struct {
+	// Console controls the optional console tools: "auto" (default), "on" or "off".
+	// "true" and "false" are accepted as synonyms for "on" and "off".
+	// Note: quote "on" and "off" in YAML, unquoted they are parsed as booleans.
+	Console string `json:"console,omitempty"`
 }
 
 // Template defines a named Go template that can be invoked from rule or status templates.

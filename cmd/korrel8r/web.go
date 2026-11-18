@@ -34,7 +34,7 @@ var webCmd = &cobra.Command{
 	Short:   "Start REST server. Listening address must be  provided via --http or --https.",
 	Aliases: []string{"server"},
 	Args:    cobra.NoArgs,
-	Run: func(_ *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, args []string) {
 		if *specFlag != "" {
 			var out = os.Stdout
 			if *specFlag != "-" {
@@ -76,6 +76,7 @@ var webCmd = &cobra.Command{
 		// Get session values from top-level configuration.
 		var timeout time.Duration
 		configs := must.Must1(config.Load(*configFlag))
+		console := must.Must1(consoleSetting(cmd, configs)) // Validate early, even if MCP is disabled.
 		var tuning config.Tuning
 		if len(configs) > 0 && configs[0].Tuning != nil {
 			tuning = *configs[0].Tuning
@@ -119,7 +120,8 @@ var webCmd = &cobra.Command{
 			mcpRouter.Use(gin.Recovery(), session.Middleware(sessions))
 			must.Must1(rest.New(sessions, mcpRouter))
 			client := mcp.NewClientForHandler(mcpRouter)
-			mcpSrv := mcp.NewServer(client, build.Version, logging.Log())
+			mcpSrv := mcp.NewServer(client, build.Version, logging.Log(),
+				mcp.EnableConsole(console.enabled(detectOpenShift)))
 			mcpSrv.AddReceivingMiddleware(mcpmetrics.Metrics)
 			router.Any(mcp.StreamablePath, gin.WrapH(mcpSrv.HTTPHandler()))
 			log.V(0).Info("MCP Streamable endpoint", "path", mcp.StreamablePath)
@@ -175,6 +177,7 @@ func init() {
 	httpsFlag = webCmd.Flags().String("https", "", "host:port address for secure https listener")
 	keyFlag = webCmd.Flags().String("key", "", "Private key (PEM format) for https")
 	mcpFlag = webCmd.Flags().Bool("mcp", true, "Enable MCP streamable HTTP protocol on "+mcp.StreamablePath)
+	addConsoleFlag(webCmd)
 	restFlag = webCmd.Flags().Bool("rest", true, "Enable HTTP REST server on "+api.BasePath)
 	unsafeSharedSessionFlag = webCmd.Flags().Bool("unsafe-shared-session", false, "Allow unauthenticated requests to share a single session (UNSAFE: disables per-user isolation)")
 	specFlag = webCmd.Flags().String("spec", "", "Write OpenAPI specification to a file, '-' for stdout.")

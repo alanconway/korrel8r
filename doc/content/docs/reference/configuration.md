@@ -154,7 +154,8 @@ Named templates defined in any configuration file (including [included](#include
 
 ## tuning
 
-Limits and optimizations:
+Limits and optimizations. Only allowed in the top-level configuration, not in
+[included](#include) files:
 
 ```yaml
 tuning:
@@ -250,6 +251,28 @@ workloads with a single session. A server with many concurrent user sessions hol
 per session, so measure your own baseline in that case. These are sizing heuristics, not memory
 guarantees: verify peak container memory with your own workloads and re-check after changing
 stores, rules, or payload sizes.
+
+## mcp
+
+MCP server settings. Only allowed in the top-level configuration, not in
+[included](#include) files:
+
+```yaml
+mcp:
+  console: auto # auto (default), "on", or "off"
+```
+
+`console`
+: Controls the optional `get_console` and `show_in_console` [MCP tools](../mcp/).
+  `auto` enables them when API discovery finds an OpenShift cluster, and disables them
+  if the cluster is not OpenShift or discovery fails. `on` enables them without detection,
+  `off` disables them. `true` and `false` are accepted as synonyms for `on` and `off`.
+  Quote `on` and `off`: unquoted, YAML parses them as booleans.
+
+The `--mcp-console` flag of the [`web`](../cmd/korrel8r_web/) and
+[`mcp`](../cmd/korrel8r_mcp/) commands overrides this setting. An invalid value is
+reported at startup whether it comes from configuration or the command line.
+See [AI agents](../../ai-agents/) for more about MCP.
 
 ## About Templates
 
