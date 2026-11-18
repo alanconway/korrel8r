@@ -24,8 +24,8 @@ BIN ?= _bin
 export GOCOVERDIR := $(abspath _cover)
 $(shell mkdir -p $(GOCOVERDIR))
 
-# Run pinned tools from the tools module without installing binaries.
-GO_TOOL = go tool -modfile=$(abspath tools/go.mod)
+# Tools from the tools module, included in go.work.
+GO_TOOL = go tool
 TOOL_DEPS = tools/go.mod tools/go.sum
 $(BIN):
 	@mkdir -p $@
@@ -48,7 +48,7 @@ GEN_QUICKRULES=pkg/rules/quickrules/applyfuncs.go
 
 GENERATED=$(VERSION_TXT) $(GEN_OPENAPI_IMPL) $(GEN_OPENAPI_API) $(GEN_DOMAIN_DOC) $(GEN_QUICKRULES)
 
-all: test doc vuln image-build ## Build and test everything locally. Recommended before commit.
+all: doc test vuln image-build ## Build and test everything locally. Recommended before commit.
 generate:  $(GENERATED)
 	hack/copyright.sh
 
@@ -198,12 +198,12 @@ undeploy:			## Delete resources created by `make deploy`
 	@kubectl delete -k config/route || true
 	@kubectl delete -k config || true
 
-pre-release:										## Prepare a release, see RELEASE.md
+pre-release:									## Validate and prepare release locally; see RELEASE.md
 	$(if $(filter file,$(origin VERSION)),$(error set VERSION explicitly for pre-release))
 	$(if $(filter file,$(origin REGISTRY_BASE)),,$(error REGISTRY_BASE must use the Makefile default))
 	hack/pre-release.sh $(VERSION)
 
-push-release:									## Publish a release, see RELEASE.md
+push-release:									## Publish API, MCP, root, and image; see RELEASE.md
 	$(if $(filter file,$(origin VERSION)),,$(error VERSION must come from the Makefile for push-release))
 	$(if $(filter file,$(origin REGISTRY_BASE)),,$(error REGISTRY_BASE must use the Makefile default))
 	hack/push-release.sh $(VERSION)
